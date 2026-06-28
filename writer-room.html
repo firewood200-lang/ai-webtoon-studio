@@ -1574,6 +1574,7 @@ async function runStep({btnId,statusId,streamId,buildFn,engineKey,stepKey,result
   const prompt=buildFn();if(!prompt)return;
   setStatus(statusId,'running','실행 중');
   setStream(streamId,true);
+  if(stepKey){const _el=g('stream-'+streamId);if(_el){const _sp=_el.querySelector('span');if(_sp){const _n={gemini:'Gemini',gpt:'GPT',claude:'Claude'};_sp.textContent=(_n[stepEngines[stepKey].ai]||stepEngines[stepKey].ai)+' 실행 중…';}}}
   g(btnId).disabled=true;
   if(nextStep!=null)goStep(nextStep);
   try{
