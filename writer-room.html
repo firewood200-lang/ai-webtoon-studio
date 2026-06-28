@@ -1558,6 +1558,7 @@ async function callClaude(prompt,model){
   });
   const data=await res.json();
   if(!res.ok)throw new Error(data.error?.message||res.status);
+  if(data.stop_reason&&data.stop_reason!=='end_turn')console.error('Claude stop_reason:',data.stop_reason,'usage:',JSON.stringify(data.usage));
   return data.content?.[0]?.text||'';
 }
 async function callAI(prompt,engineKey){
