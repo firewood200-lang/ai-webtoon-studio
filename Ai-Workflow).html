@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AI 워크플로우</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#12121e;
+  --bg2:#1a1a2e;
+  --bg3:#0d0d18;
+  --card:#1e1e38;
+  --accent:#4a6fff;
+  --accent2:#7c9fff;
+  --text:#e0e0f0;
+  --text2:#9090b0;
+  --text3:#555570;
+  --border:#2a2a4a;
+  --ok:#33aa55;
+  --err:#cc4444;
+  --warn:#cc8833;
+  --nav-h:64px;
+  --header-h:56px;
+  --tabs-h:48px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;}
+
+/* 헤더 */
+.header{position:fixed;top:0;left:0;right:0;height:var(--header-h);background:var(--bg3);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:100;}
+.header-title{font-size:16px;font-weight:700;color:var(--text);letter-spacing:.5px;}
+.header-process{font-size:11px;color:var(--accent2);font-weight:600;}
+.btn-settings-open{background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:8px;line-height:1;}
+
+/* 메인 스크롤 영역 */
+.main{position:fixed;top:calc(var(--header-h) + var(--tabs-h));left:0;right:0;bottom:var(--nav-h);overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--bg);}
+.page{display:none;padding:12px 12px 80px;}
+.page.active{display:block;}
+
+/* 슬롯 카드 */
+.slot-card{background:var(--card);border-radius:12px;margin-bottom:12px;overflow:hidden;border:1.5px dashed var(--border);}
+.slot-card.has-image{border-style:solid;border-color:var(--accent);}
+.slot-label{padding:10px 14px;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;display:flex;justify-content:space-between;align-items:center;}
+.slot-preview{min-height:120px;display:flex;align-items:center;justify-content:center;position:relative;background:var(--bg3);}
+.slot-preview img{width:100%;max-height:280px;object-fit:contain;display:block;}
+.slot-empty{text-align:center;padding:24px 16px;}
+.slot-empty-icon{font-size:36px;opacity:.3;display:block;margin-bottom:8px;}
+.slot-empty-text{font-size:12px;color:var(--text3);line-height:1.6;}
+.slot-btns{display:flex;gap:8px;padding:10px 12px;}
+.btn-slot-file{flex:1;padding:11px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600;transition:background .15s;}
+.btn-slot-file:active{background:var(--bg2);}
+.btn-slot-del{padding:11px 14px;background:#2a1a1a;color:#aa5555;border:1px solid #3a2020;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;}
+.btn-slot-del:active{background:#3a2020;}
+input[type=file]{display:none;}
+
+/* 프롬프트 섹션 */
+.section-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding:0 2px;}
+.prompt-card{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+.prompt-header{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);}
+.prompt-header-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;}
+.prompt-header-btns{display:flex;gap:6px;}
+.btn-prompt{background:var(--bg3);color:var(--text2);border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit;}
+.btn-prompt.lock{font-size:15px;padding:4px 8px;}
+.prompt-body{position:relative;}
+textarea.prompt-text{width:100%;min-height:140px;background:transparent;color:var(--text);border:none;padding:12px 14px;font-size:12px;font-family:'Consolas',monospace;line-height:1.7;resize:none;outline:none;}
+.prompt-blur{position:absolute;inset:0;backdrop-filter:blur(10px);background:rgba(10,10,20,.7);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;}
+.prompt-blur.hidden{display:none;}
+.prompt-blur-icon{font-size:32px;opacity:.5;}
+.prompt-blur-text{font-size:12px;color:var(--text3);}
+.prompt-blur-input{background:var(--bg3);color:var(--text);border:1.5px solid var(--accent);border-radius:8px;padding:8px 14px;font-size:14px;outline:none;width:200px;text-align:center;}
+.btn-prompt-unlock{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+
+/* 미세수정 */
+.fine-tune-card{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+.fine-tune-inner{display:flex;align-items:center;gap:10px;padding:10px 14px;}
+.fine-tune-lbl{font-size:11px;color:var(--text3);flex-shrink:0;}
+input.fine-tune{flex:1;background:transparent;color:var(--text);border:none;font-size:13px;font-family:inherit;outline:none;padding:4px 0;}
+input.fine-tune::placeholder{color:var(--text3);}
+.cut-number-inner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);}
+input.cut-number-m{flex:1;background:transparent;color:var(--text);border:none;font-size:13px;font-family:'Consolas',monospace;outline:none;padding:4px 0;}
+input.cut-number-m::placeholder{color:var(--text3);}
+
+/* 컨트롤 카드 */
+.ctrl-card{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+.ctrl-row{display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);}
+.ctrl-row:last-child{border-bottom:none;}
+.ctrl-lbl{font-size:12px;color:var(--text2);min-width:90px;flex-shrink:0;}
+select.ctrl-sel{flex:1;background:transparent;color:var(--text);border:none;font-size:13px;font-family:inherit;outline:none;cursor:pointer;-webkit-appearance:none;text-align:right;}
+.ctrl-arrow{color:var(--text3);font-size:10px;margin-left:4px;}
+input[type=range]{flex:1;accent-color:var(--accent);}
+.ctrl-val{font-size:13px;color:var(--accent2);min-width:28px;text-align:right;flex-shrink:0;}
+
+/* 실행 버튼 고정 */
+.run-fixed{position:fixed;bottom:calc(var(--nav-h) + 12px);left:12px;right:12px;z-index:90;}
+.btn-run{width:100%;padding:16px;background:var(--accent);color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.5px;transition:background .15s;box-shadow:0 4px 20px rgba(74,111,255,.3);}
+.btn-run:active{background:#3a55ee;}
+.btn-run:disabled{background:var(--card);color:var(--text3);box-shadow:none;}
+.status-bar{text-align:center;padding:6px 0;font-size:12px;min-height:24px;}
+.status-bar.running{color:var(--warn);}
+.status-bar.ok{color:var(--ok);}
+.status-bar.err{color:var(--err);}
+
+/* 결과 모달 */
+.result-modal{position:fixed;inset:0;background:var(--bg);z-index:200;display:none;flex-direction:column;}
+.result-modal.open{display:flex;}
+.result-modal-header{flex-shrink:0;padding:0 16px;height:var(--header-h);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--bg3);}
+.result-modal-title{font-size:15px;font-weight:700;color:var(--text);}
+.btn-modal-close{background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:8px;}
+.result-modal-body{flex:1;overflow-y:auto;padding:16px;}
+.result-img-wrap{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+.result-img{width:100%;display:block;object-fit:contain;}
+.result-img-label{padding:8px 14px;font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.result-info{background:var(--card);border-radius:12px;padding:12px 14px;margin-bottom:12px;}
+.result-info-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;}
+.result-info-lbl{color:var(--text2);}
+.result-info-val{color:var(--text);font-weight:600;}
+/* 평가 */
+.eval-card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:12px;}
+.eval-title{font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
+.eval-stars{display:flex;gap:8px;margin-bottom:12px;}
+.btn-star{background:none;border:none;font-size:28px;color:var(--text3);cursor:pointer;transition:color .1s;padding:4px;}
+.btn-star.active{color:#ccaa22;}
+.eval-btns{display:flex;gap:8px;}
+.btn-pass{flex:1;padding:12px;background:#1a3a1a;color:#5aaa5a;border:1px solid #2a4a2a;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-fail{flex:1;padding:12px;background:#3a1a1a;color:#aa5a5a;border:1px solid #4a2a2a;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-continue-result{width:100%;padding:12px;background:var(--bg2);color:var(--accent2);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;}
+.btn-save-gallery{width:100%;padding:14px;background:#1a3a2a;color:#5acc88;border:1px solid #2a4a3a;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;}
+
+/* 이력 탭 */
+.log-list{padding:8px 0;}
+.log-item{padding:12px 14px;background:var(--card);border-radius:10px;margin-bottom:8px;}
+.log-item-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.log-item-proc{font-size:12px;font-weight:700;color:var(--accent2);}
+.log-item-status{font-size:11px;font-weight:700;}
+.log-item-status.ok{color:var(--ok);}
+.log-item-status.err{color:var(--err);}
+.log-item-bottom{display:flex;gap:12px;font-size:11px;color:var(--text2);}
+
+/* 통계 탭 */
+.stat-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.stat-card{background:var(--card);border-radius:12px;padding:14px;}
+.stat-card-val{font-size:24px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.stat-card-lbl{font-size:11px;color:var(--text2);}
+.stat-card.accent .stat-card-val{color:var(--accent2);}
+.stat-card.ok .stat-card-val{color:var(--ok);}
+
+/* 하단 네비게이션 */
+.nav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:var(--bg3);border-top:1px solid var(--border);display:flex;z-index:100;}
+.nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:3px;transition:background .15s;border:none;background:none;color:var(--text3);font-family:inherit;}
+.nav-tab.active{color:var(--accent2);}
+.nav-tab:active{background:rgba(74,111,255,.08);}
+.nav-tab-icon{font-size:18px;line-height:1;}
+.nav-tab-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+
+/* 설정 모달 */
+.settings-modal{position:fixed;inset:0;background:var(--bg);z-index:300;display:none;flex-direction:column;}
+.settings-modal.open{display:flex;}
+.settings-modal-header{flex-shrink:0;padding:0 16px;height:var(--header-h);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--bg3);}
+.settings-modal-title{font-size:15px;font-weight:700;}
+.settings-modal-body{flex:1;overflow-y:auto;padding:16px;}
+.settings-section-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;margin-top:20px;}
+.settings-section-title:first-child{margin-top:0;}
+.settings-card{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:4px;}
+.settings-row{display:flex;align-items:center;padding:14px;border-bottom:1px solid var(--border);}
+.settings-row:last-child{border-bottom:none;}
+.settings-lbl{font-size:13px;color:var(--text);flex:1;}
+.settings-input{background:transparent;color:var(--text);border:none;font-size:13px;font-family:inherit;outline:none;text-align:right;flex:1;}
+.settings-input[type=password]{letter-spacing:3px;}
+.settings-input::placeholder{color:var(--text3);}
+select.settings-sel{background:transparent;color:var(--text);border:none;font-size:13px;font-family:inherit;outline:none;text-align:right;-webkit-appearance:none;cursor:pointer;}
+.settings-check{width:22px;height:22px;accent-color:var(--accent);}
+.btn-settings-save{width:100%;padding:16px;background:var(--accent);color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:20px;}
+
+/* API 키 보안 */
+.apikey-row{display:flex;align-items:center;gap:8px;}
+.apikey-display{flex:1;font-size:13px;color:var(--text2);letter-spacing:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.btn-apikey-toggle{background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px;}
+
+/* 토스트 */
+.toast{position:fixed;bottom:calc(var(--nav-h) + 80px);left:50%;transform:translateX(-50%);background:rgba(30,30,60,.95);color:var(--text);padding:10px 20px;border-radius:20px;font-size:13px;z-index:400;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+
+/* 빈 상태 */
+.empty-state{text-align:center;padding:48px 24px;}
+.empty-icon{font-size:48px;opacity:.2;display:block;margin-bottom:12px;}
+.empty-text{font-size:13px;color:var(--text3);line-height:1.6;}
+
+/* 공정 선택 헤더 */
+.process-tabs{position:fixed;top:var(--header-h);left:0;right:0;height:var(--tabs-h);display:flex;overflow-x:auto;gap:8px;padding:8px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:var(--bg3);border-bottom:1px solid var(--border);z-index:99;}
+.process-tabs::-webkit-scrollbar{display:none;}
+.process-tab{flex-shrink:0;padding:7px 14px;background:var(--card);border:1.5px solid var(--border);border-radius:20px;font-size:12px;font-weight:700;color:var(--text2);cursor:pointer;white-space:nowrap;}
+.process-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="header">
+  <div>
+    <div class="header-title">AI 워크플로우</div>
+    <div class="header-process" id="headerProcess">펜터치</div>
+  </div>
+  <button class="btn-settings-open" id="btnSettingsOpen">⚙</button>
+</div>
+
+<!-- 공정 탭 (스크롤) -->
+<div class="process-tabs" id="processTabs">
+  <div class="process-tab active" data-process="pentouch">펜터치</div>
+  <div class="process-tab" data-process="coloring">인물채색</div>
+  <div class="process-tab" data-process="bglineart">배경선화</div>
+  <div class="process-tab" data-process="bgcoloring">배경채색</div>
+  <div class="process-tab" data-process="lora">LoRA</div>
+</div>
+
+<!-- 메인 -->
+<div class="main">
+
+  <!-- 작업 탭 -->
+  <div class="page active" id="pageWork" style="padding-top:8px;">
+    <div id="slotsContainer"></div>
+
+    <div class="section-title" style="margin-top:4px;">프롬프트</div>
+    <div class="prompt-card">
+      <div class="prompt-header">
+        <span class="prompt-header-title">프롬프트</span>
+        <div class="prompt-header-btns">
+          <button class="btn-prompt" id="btnPromptRestore">↩ 원본</button>
+          <button class="btn-prompt lock" id="btnPromptLock">👁</button>
+        </div>
+      </div>
+      <div class="prompt-body">
+        <textarea class="prompt-text" id="promptText" spellcheck="false" placeholder="프롬프트를 입력하세요..."></textarea>
+        <div class="prompt-blur hidden" id="promptBlur">
+          <span class="prompt-blur-icon">🔒</span>
+          <span class="prompt-blur-text">비밀번호 입력</span>
+          <input class="prompt-blur-input" id="pwInput" type="password" placeholder="비밀번호" autocomplete="off">
+          <button class="btn-prompt-unlock" id="btnPwConfirm">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="fine-tune-card">
+      <div class="cut-number-inner">
+        <span class="fine-tune-lbl">컷번호</span>
+        <input class="cut-number-m" id="cutNumber" type="text" placeholder="예: C-001">
+      </div>
+      <div class="fine-tune-inner">
+        <span class="fine-tune-lbl">미세수정</span>
+        <input class="fine-tune" id="fineTune" type="text" placeholder="추가 지시사항 (실행 후 자동 초기화)">
+      </div>
+    </div>
+
+    <div class="section-title">설정</div>
+    <div class="ctrl-card">
+      <div class="ctrl-row">
+        <span class="ctrl-lbl">모델</span>
+        <select class="ctrl-sel" id="modelSelect">
+          <option value="gemini-3.1-flash-image">Flash</option>
+          <option value="gemini-3.1-flash-image-preview">Flash Preview</option>
+          <option value="gemini-3-pro-image">Pro</option>
+          <option value="gemini-3-pro-image-preview">Pro Preview</option>
+        </select>
+        <span class="ctrl-arrow">›</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-lbl">해상도</span>
+        <select class="ctrl-sel" id="resolutionSelect">
+          <option value="">Auto</option>
+          <option value="512">512</option>
+          <option value="1K">1K</option>
+          <option value="2K">2K</option>
+        </select>
+        <span class="ctrl-arrow">›</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-lbl">비율</span>
+        <select class="ctrl-sel" id="aspectSelect">
+          <option value="">Auto</option>
+          <option value="1:1">1:1</option>
+          <option value="3:4">3:4</option>
+          <option value="4:3">4:3</option>
+          <option value="9:16">9:16</option>
+          <option value="16:9">16:9</option>
+        </select>
+        <span class="ctrl-arrow">›</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-lbl">Temperature</span>
+        <input type="range" id="tempSlider" min="0" max="2" step="0.1" value="1.0">
+        <span class="ctrl-val" id="tempVal">1.0</span>
+      </div>
+    </div>
+
+    <div class="status-bar" id="statusBar"></div>
+  </div>
+
+  <!-- 이력 탭 -->
+  <div class="page" id="pageLog">
+    <div class="log-list" id="logList">
+      <div class="empty-state">
+        <span class="empty-icon">📋</span>
+        <div class="empty-text">실행 이력이 없습니다.<br>작업 탭에서 실행하면 여기에 기록됩니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 통계 탭 -->
+  <div class="page" id="pageStat">
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="stat-card-val" id="statRuns">0</div>
+        <div class="stat-card-lbl">총 실행</div>
+      </div>
+      <div class="stat-card ok">
+        <div class="stat-card-val" id="statOk">0</div>
+        <div class="stat-card-lbl">성공</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-card-val" id="statCost">₩0</div>
+        <div class="stat-card-lbl">총 비용</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-val" id="statAvg">—</div>
+        <div class="stat-card-lbl">평균 시간</div>
+      </div>
+    </div>
+    <div class="section-title">공정별 현황</div>
+    <div id="statByProcess"></div>
+  </div>
+
+</div>
+
+<!-- 실행 버튼 고정 (작업 탭에서만) -->
+<div class="run-fixed" id="runFixed">
+  <div style="display:flex;gap:8px;">
+    <button class="btn-run" id="btnRun" style="flex:1;">▶ 실행</button>
+    <button class="btn-run" id="btnNotionLog" style="flex:0 0 64px;background:#2a2a4a;font-size:20px;" title="노션에 기록">📋</button>
+  </div>
+</div>
+
+<!-- 하단 네비게이션 -->
+<nav class="nav">
+  <button class="nav-tab active" data-tab="work">
+    <span class="nav-tab-icon">✏️</span>
+    <span class="nav-tab-label">작업</span>
+  </button>
+  <button class="nav-tab" data-tab="log">
+    <span class="nav-tab-icon">📋</span>
+    <span class="nav-tab-label">이력</span>
+  </button>
+  <button class="nav-tab" data-tab="stat">
+    <span class="nav-tab-icon">📊</span>
+    <span class="nav-tab-label">통계</span>
+  </button>
+</nav>
+
+<!-- 결과 모달 -->
+<div class="result-modal" id="resultModal">
+  <div class="result-modal-header">
+    <span class="result-modal-title">결과</span>
+    <button class="btn-modal-close" id="btnResultClose">✕</button>
+  </div>
+  <div class="result-modal-body">
+    <div class="result-img-wrap">
+      <div class="result-img-label">입력</div>
+      <img class="result-img" id="resultInputImg" src="" alt="">
+    </div>
+    <div class="result-img-wrap">
+      <div class="result-img-label">결과</div>
+      <img class="result-img" id="resultOutputImg" src="" alt="">
+    </div>
+    <div class="result-info" id="resultInfo"></div>
+    <div class="eval-card">
+      <div class="eval-title">평가</div>
+      <div class="eval-stars" id="evalStars">
+        <button class="btn-star" data-star="1">★</button>
+        <button class="btn-star" data-star="2">★</button>
+        <button class="btn-star" data-star="3">★</button>
+        <button class="btn-star" data-star="4">★</button>
+        <button class="btn-star" data-star="5">★</button>
+      </div>
+      <div class="eval-btns">
+        <button class="btn-pass" id="btnPass">✓ Pass</button>
+        <button class="btn-fail" id="btnFail">✗ Fail</button>
+      </div>
+      <button class="btn-continue-result" id="btnContinue">↺ 이어서 수정 (결과 → 슬롯1)</button>
+      <button class="btn-save-gallery" id="btnSaveGallery">📷 사진 보관함에 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 설정 모달 -->
+<div class="settings-modal" id="settingsModal">
+  <div class="settings-modal-header">
+    <span class="settings-modal-title">⚙ 설정</span>
+    <button class="btn-modal-close" id="btnSettingsClose">✕</button>
+  </div>
+  <div class="settings-modal-body">
+    <div class="settings-section-title">API 키</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <span class="settings-lbl">Gemini API 키</span>
+        <div class="apikey-row">
+          <span class="apikey-display" id="apikeyDisplay">미설정</span>
+          <button class="btn-apikey-toggle" id="btnApikeyToggle">👁</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <input class="settings-input" id="apikeyInput" type="password" placeholder="API 키 입력" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="settings-section-title">노션 연동</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <span class="settings-lbl">Notion API 키</span>
+        <input class="settings-input" id="notionKeyInput" type="password" placeholder="secret_..." autocomplete="off">
+      </div>
+    </div>
+
+    <div class="settings-section-title">보안</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <span class="settings-lbl">프롬프트 비밀번호</span>
+        <input class="settings-input" id="settingsPw" type="password" placeholder="설정 시 블러 활성화" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="settings-section-title">공정 자동 연결</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <span class="settings-lbl">펜터치 → 인물채색</span>
+        <input type="checkbox" class="settings-check" id="link1">
+      </div>
+      <div class="settings-row">
+        <span class="settings-lbl">인물채색 → 배경채색</span>
+        <input type="checkbox" class="settings-check" id="link2">
+      </div>
+      <div class="settings-row">
+        <span class="settings-lbl">배경선화 → 배경채색</span>
+        <input type="checkbox" class="settings-check" id="link3">
+      </div>
+    </div>
+
+    <div class="settings-section-title">재시도</div>
+    <div class="settings-card">
+      <div class="settings-row">
+        <span class="settings-lbl">자동 재시도 횟수</span>
+        <select class="settings-sel" id="settingsRetry">
+          <option value="0">사용 안 함</option>
+          <option value="1" selected>1회</option>
+          <option value="2">2회</option>
+          <option value="3">3회</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn-settings-save" id="btnSettingsSave">저장</button>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 공정 정의 ──
+const PROCESS_CONFIG = {
+  pentouch:   { label:'펜터치',   slots:[{id:'slot1',label:'러프 스케치'},{id:'slot2',label:'레퍼런스 (선 질감)'}] },
+  coloring:   { label:'인물채색', slots:[{id:'slot1',label:'인물 선화'},{id:'slot2',label:'캐릭터 설정 시트'}] },
+  bglineart:  { label:'배경선화', slots:[{id:'slot1',label:'러프 스케치'}] },
+  bgcoloring: { label:'배경채색', slots:[{id:'slot1',label:'배경 선화'},{id:'slot2',label:'색감 레퍼런스'}] },
+  lora:       { label:'LoRA',     slots:[{id:'slot1',label:'러프 드로잉'},{id:'slot2',label:'캐릭터 시트'}] },
+};
+
+const DEFAULT_PROMPTS = {
+  pentouch: `너는 20년 경력의 만화 전문 인커(Inker)다. 러프 스케치를 보고 펜터치하는 것이 유일한 임무다.`,
+  coloring: `인물 선화에 캐릭터 설정 시트 기준으로 채색하라. 선화를 변경하지 말 것.`,
+  bglineart: `배경 러프를 흑백 잉크 선화로 변환하라. 인물은 완전히 제외할 것.`,
+  bgcoloring: `배경 선화에 색감 레퍼런스 기준으로 채색하라. 셀 셰이딩 스타일.`,
+  lora: `러프 드로잉과 캐릭터 시트를 기준으로 완성된 캐릭터 일러스트를 생성하라.`,
+};
+
+// ── 상태 ──
+let currentProcess = 'pentouch';
+let promptUnlocked = false;
+let lastResult = null;
+let lastElapsed = 0;
+let lastCost = { krw: 0, usd: 0 };
+const slotData = Object.fromEntries(Object.keys(PROCESS_CONFIG).map(k => [k, {}]));
+const sessionStat = { runs:0, ok:0, err:0, totalCost:0, totalTime:0 };
+const statByProc = {};
+
+// ── 사용자 식별 ──
+// 구독제 전환 시: 로그인 후 localStorage.setItem('app_user_id', 서버발급ID) 만 추가하면 전체 앱에 반영됨
+function getCurrentUserId() {
+  return localStorage.getItem('app_user_id') || 'local';
+}
+
+// ── 로컬스토리지 ──
+function loadConfig() {
+  const c = JSON.parse(localStorage.getItem('ai_workflow_config') || '{}');
+  if (!c.user_id) c.user_id = getCurrentUserId(); // user_id 없으면 자동 추가
+  return c;
+}
+function saveConfig(cfg) {
+  cfg.user_id = getCurrentUserId();
+  localStorage.setItem('ai_workflow_config', JSON.stringify(cfg));
+}
+function loadPrompts() {
+  try { return JSON.parse(localStorage.getItem('ai_workflow_prompts') || '{}'); } catch(e) { return {}; }
+}
+function savePrompts(p) {
+  localStorage.setItem('ai_workflow_prompts', JSON.stringify(p));
+}
+
+let config = loadConfig();
+let prompts = { ...DEFAULT_PROMPTS, ...loadPrompts() };
+
+// ── 초기화 ──
+(function init() {
+  renderSlots();
+  loadPrompt();
+  applyPromptLock();
+  bindEvents();
+  updateStatUI();
+})();
+
+// ── 슬롯 ──
+function renderSlots() {
+  const container = document.getElementById('slotsContainer');
+  container.innerHTML = '';
+  PROCESS_CONFIG[currentProcess].slots.forEach(slot => {
+    const data = slotData[currentProcess][slot.id];
+    const div = document.createElement('div');
+    div.className = 'slot-card' + (data ? ' has-image' : '');
+    div.innerHTML = `
+      <div class="slot-label">
+        <span>${slot.label}</span>
+        ${data ? '<span style="color:var(--ok);font-size:10px;">✓ 이미지 있음</span>' : ''}
+      </div>
+      <div class="slot-preview" id="preview_${slot.id}">
+        ${data
+          ? `<img src="data:${data.mime};base64,${data.base64}" draggable="false">`
+          : `<div class="slot-empty">
+              <span class="slot-empty-icon">🖼️</span>
+              <div class="slot-empty-text">이미지를 선택하세요</div>
+             </div>`}
+      </div>
+      <div class="slot-btns">
+        <button class="btn-slot-file" data-slot="${slot.id}">📂 이미지 선택</button>
+        ${data ? `<button class="btn-slot-del" data-slot="${slot.id}">✕</button>` : ''}
+      </div>
+      <input type="file" id="file_${slot.id}" accept="image/*">`;
+    container.appendChild(div);
+
+    div.querySelector('.btn-slot-file').addEventListener('click', () => {
+      div.querySelector(`#file_${slot.id}`).click();
+    });
+    div.querySelector(`#file_${slot.id}`).addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const base64 = await fileToBase64(file);
+      slotData[currentProcess][slot.id] = { base64, mime: file.type, name: file.name };
+      renderSlots();
+    });
+    if (data) {
+      div.querySelector('.btn-slot-del').addEventListener('click', () => {
+        slotData[currentProcess][slot.id] = null;
+        renderSlots();
+      });
+    }
+  });
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => res(e.target.result.split(',')[1]);
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── 프롬프트 ──
+function loadPrompt() {
+  document.getElementById('promptText').value = prompts[currentProcess] || '';
+}
+
+function applyPromptLock() {
+  const hasPw = !!(config.promptPassword);
+  const blurEl = document.getElementById('promptBlur');
+  if (hasPw && !promptUnlocked) {
+    blurEl.classList.remove('hidden');
+  } else {
+    blurEl.classList.add('hidden');
+  }
+  document.getElementById('btnPromptLock').textContent = promptUnlocked ? '🔓' : '👁';
+}
+
+// ── 이벤트 ──
+function bindEvents() {
+  // 공정 탭
+  document.querySelectorAll('.process-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.process-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentProcess = tab.dataset.process;
+      document.getElementById('headerProcess').textContent = PROCESS_CONFIG[currentProcess].label;
+      promptUnlocked = false;
+      renderSlots();
+      loadPrompt();
+      applyPromptLock();
+      setStatus('', '');
+    });
+  });
+
+  // 하단 탭
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const tabName = tab.dataset.tab;
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById('page' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).classList.add('active');
+      document.getElementById('runFixed').style.display = tabName === 'work' ? 'block' : 'none';
+      if (tabName === 'stat') updateStatUI();
+    });
+  });
+
+  // 프롬프트 자동 저장
+  document.getElementById('promptText').addEventListener('input', () => {
+    prompts[currentProcess] = document.getElementById('promptText').value;
+    savePrompts(prompts);
+  });
+
+  // 원본 복원
+  document.getElementById('btnPromptRestore').addEventListener('click', () => {
+    prompts[currentProcess] = DEFAULT_PROMPTS[currentProcess];
+    savePrompts(prompts);
+    loadPrompt();
+    showToast('원본으로 복원됐습니다');
+  });
+
+  // 잠금 버튼
+  document.getElementById('btnPromptLock').addEventListener('click', () => {
+    if (!config.promptPassword) return;
+    if (promptUnlocked) {
+      promptUnlocked = false;
+      applyPromptLock();
+    } else {
+      document.getElementById('promptBlur').classList.remove('hidden');
+      document.getElementById('pwInput').value = '';
+      document.getElementById('pwInput').focus();
+    }
+  });
+
+  // 비밀번호 확인
+  function tryUnlock() {
+    if (document.getElementById('pwInput').value === config.promptPassword) {
+      promptUnlocked = true;
+      applyPromptLock();
+      showToast('잠금 해제됐습니다');
+    } else {
+      document.getElementById('pwInput').value = '';
+      document.getElementById('pwInput').placeholder = '틀렸습니다';
+      setTimeout(() => document.getElementById('pwInput').placeholder = '', 1500);
+    }
+  }
+  document.getElementById('btnPwConfirm').addEventListener('click', tryUnlock);
+  document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+
+  // Temperature
+  document.getElementById('tempSlider').addEventListener('input', e => {
+    document.getElementById('tempVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+
+  // 실행
+  document.getElementById('btnRun').addEventListener('click', runProcess);
+
+  // 결과 모달 닫기
+  document.getElementById('btnResultClose').addEventListener('click', () => {
+    document.getElementById('resultModal').classList.remove('open');
+  });
+
+  // 별점
+  let currentRating = 0;
+  document.querySelectorAll('.btn-star').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentRating = parseInt(btn.dataset.star);
+      document.querySelectorAll('.btn-star').forEach((b, i) => b.classList.toggle('active', i < currentRating));
+    });
+  });
+
+  // Pass/Fail
+  document.getElementById('btnPass').addEventListener('click', () => {
+    const ratingStr = currentRating > 0 ? ` ★${currentRating}` : ' (별점없음)';
+    showToast(`Pass로 평가됐습니다${ratingStr} ✓`);
+    sendNotionLog({
+      status: '성공', elapsed: lastElapsed, model: document.getElementById('modelSelect').value,
+      errDetail: '', costKrw: lastCost.krw, costUsd: lastCost.usd,
+      evalResult: 'pass', rating: currentRating, isEval: true
+    });
+  });
+  document.getElementById('btnFail').addEventListener('click', () => {
+    const ratingStr = currentRating > 0 ? ` ★${currentRating}` : ' (별점없음)';
+    showToast(`Fail로 평가됐습니다${ratingStr}`);
+    sendNotionLog({
+      status: '실패', elapsed: lastElapsed, model: document.getElementById('modelSelect').value,
+      errDetail: '', costKrw: lastCost.krw, costUsd: lastCost.usd,
+      evalResult: 'fail', rating: currentRating, isEval: true
+    });
+  });
+
+  // 이어서 수정
+  document.getElementById('btnContinue').addEventListener('click', () => {
+    if (!lastResult) return;
+    slotData[currentProcess]['slot1'] = lastResult;
+    document.getElementById('resultModal').classList.remove('open');
+    // 작업 탭으로 전환
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'work'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('pageWork').classList.add('active');
+    document.getElementById('runFixed').style.display = 'block';
+    renderSlots();
+    showToast('결과 이미지가 슬롯1에 삽입됐습니다');
+  });
+
+  // 사진 보관함 저장
+  document.getElementById('btnSaveGallery').addEventListener('click', saveToGallery);
+
+  // 노션 수동 기록
+  document.getElementById('btnNotionLog').addEventListener('click', async () => {
+    if (!config.notionKey) { showToast('설정에서 Notion API 키를 입력해주세요'); openSettings(); return; }
+    const proc = PROCESS_LABEL[currentProcess] || currentProcess;
+    const now = new Date();
+    const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    showToast('노션에 기록 중...');
+    try {
+      const res = await fetch('https://notion-proxy.firewood2000.workers.dev/v1/pages', {
+        method: 'POST',
+        headers: {
+          'X-Notion-Key': config.notionKey,
+          'Content-Type': 'application/json',
+          },
+        body: JSON.stringify({
+          parent: { database_id: '45011fe3-2735-4ebb-a67f-32f3534b579c' },
+          properties: {
+            '제목':       { title: [{ text: { content: `[${proc}] 수동기록 — ${timeStr}` } }] },
+            '공정':       { select: { name: proc } },
+            '상태':       { select: { name: '성공' } },
+            '카테고리':   { select: { name: '실행' } },
+            '날짜':       { date: { start: now.toISOString() } },
+            '모델':       { select: { name: document.getElementById('modelSelect').value } },
+            '소요시간(초)': { number: lastElapsed || 0 },
+            '비용(원)':   { number: lastCost.krw },
+            '비용(USD)':  { number: lastCost.usd },
+          }
+        })
+      });
+      if (res.ok) { showToast('노션 기록 완료 ✓'); }
+      else { const err = await res.json(); showToast('노션 기록 실패: ' + (err.message || res.status)); }
+    } catch(e) { showToast('노션 기록 실패: ' + e.message); }
+  });
+
+  // 설정
+  document.getElementById('btnSettingsOpen').addEventListener('click', openSettings);
+  document.getElementById('btnSettingsClose').addEventListener('click', () => document.getElementById('settingsModal').classList.remove('open'));
+  document.getElementById('btnSettingsSave').addEventListener('click', saveSettings);
+
+  // API 키 토글
+  document.getElementById('btnApikeyToggle').addEventListener('click', () => {
+    const input = document.getElementById('apikeyInput');
+    if (input.type === 'password') {
+      input.type = 'text';
+      document.getElementById('btnApikeyToggle').textContent = '🔒';
+    } else {
+      input.type = 'password';
+      document.getElementById('btnApikeyToggle').textContent = '👁';
+    }
+  });
+}
+
+// ── 실행 ──
+async function runProcess() {
+  const slots = PROCESS_CONFIG[currentProcess].slots;
+  const images = slots.map(s => slotData[currentProcess][s.id]).filter(Boolean);
+  if (!images.length) { showToast('이미지를 하나 이상 선택해주세요'); return; }
+
+  let prompt = document.getElementById('promptText').value.trim();
+  if (!prompt) { showToast('프롬프트를 입력해주세요'); return; }
+
+  const apiKey = config.apiKey;
+  if (!apiKey) { showToast('설정에서 API 키를 입력해주세요'); openSettings(); return; }
+
+  const fineTune = document.getElementById('fineTune').value.trim();
+  if (fineTune) prompt += `\n\n[추가 지시] ${fineTune}`;
+
+  const model      = document.getElementById('modelSelect').value;
+  const imageSize  = document.getElementById('resolutionSelect').value;
+  const aspectRatio= document.getElementById('aspectSelect').value;
+  const temperature= document.getElementById('tempSlider').value;
+  const retryMax   = parseInt(config.retryCount ?? 1);
+
+  document.getElementById('btnRun').disabled = true;
+  setStatus('running', '처리 중... 0초');
+
+  const t0 = Date.now();
+  let result = null;
+  let retryCount = 0;
+  let lastErr = '';
+
+  // 경과 시간 카운터
+  const timerInterval = setInterval(() => {
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    const label = retryCount > 0 ? `재시도 ${retryCount}/${retryMax}` : '처리 중';
+    setStatus('running', `${label}... ${sec}초`);
+  }, 1000);
+
+  const TIMEOUT_MS = 600000; // 10분
+
+  while (retryCount <= retryMax) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      result = await callGemini({ prompt, images, model, imageSize, aspectRatio, temperature, apiKey, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (result.success) break;
+      lastErr = result.error || '실패';
+    } catch(e) {
+      if (e.name === 'AbortError') { lastErr = '타임아웃 (10분 초과)'; break; }
+      lastErr = String(e);
+    }
+    retryCount++;
+  }
+
+  clearInterval(timerInterval);
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  document.getElementById('btnRun').disabled = false;
+
+  // 미세수정 초기화
+  document.getElementById('fineTune').value = '';
+
+  if (result && result.success) {
+    setStatus('ok', `완료 (${elapsed}초)`);
+    lastResult = { base64: result.base64, mime: result.mime };
+    // 자동 저장
+    try {
+      const link = document.createElement('a');
+      link.href = `data:${result.mime};base64,${result.base64}`;
+      link.download = `ai_${currentProcess}_${Date.now()}.jpg`;
+      link.click();
+      showToast('결과 이미지가 자동 저장됐습니다 📷');
+    } catch(e) {}
+    showResult(images[0], result, elapsed, model);
+    addLog('ok', elapsed, model);
+    const statOk = updateStat(true, parseFloat(elapsed));
+    lastElapsed = parseFloat(elapsed);
+    lastCost = { krw: statOk.costKrw, usd: statOk.costUsd };
+    sendNotionLog({ status:'성공', elapsed, model, errDetail:'', costKrw: statOk.costKrw, costUsd: statOk.costUsd });
+  } else {
+    setStatus('err', lastErr || '실패');
+    addLog('err', elapsed, model);
+    updateStat(false, parseFloat(elapsed));
+    sendNotionLog({ status:'실패', elapsed, model, errDetail: lastErr || '' });
+    showToast('실패: ' + (lastErr || '알 수 없는 오류'));
+  }
+}
+
+async function callGemini({ prompt, images, model, imageSize, aspectRatio, temperature, apiKey, signal }) {
+  const parts = [{ text: prompt }];
+  images.forEach(img => parts.push({ inlineData: { mimeType: img.mime, data: img.base64 } }));
+  const generationConfig = { responseModalities: ['IMAGE','TEXT'], temperature: parseFloat(temperature)||1.0 };
+  if (imageSize || aspectRatio) {
+    generationConfig.imageConfig = {};
+    if (imageSize) generationConfig.imageConfig.imageSize = imageSize;
+    if (aspectRatio) generationConfig.imageConfig.aspectRatio = aspectRatio;
+  }
+  const body = { contents: [{ parts }], generationConfig };
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const json = await res.json();
+  const resParts = json.candidates?.[0]?.content?.parts || [];
+  const imagePart = resParts.find(p => p.inlineData);
+  const textPart  = resParts.find(p => p.text);
+  if (imagePart) {
+    return { success: true, base64: imagePart.inlineData.data, mime: imagePart.inlineData.mimeType, text: textPart?.text || '' };
+  }
+  return { success: false, error: textPart?.text || JSON.stringify(json), text: textPart?.text || '' };
+}
+
+// ── 결과 표시 ──
+function showResult(inputImg, result, elapsed, model) {
+  document.getElementById('resultInputImg').src = `data:${inputImg.mime};base64,${inputImg.base64}`;
+  document.getElementById('resultOutputImg').src = `data:${result.mime};base64,${result.base64}`;
+  document.getElementById('resultInfo').innerHTML = `
+    <div class="result-info-row"><span class="result-info-lbl">공정</span><span class="result-info-val">${PROCESS_CONFIG[currentProcess].label}</span></div>
+    <div class="result-info-row"><span class="result-info-lbl">모델</span><span class="result-info-val">${model}</span></div>
+    <div class="result-info-row"><span class="result-info-lbl">소요시간</span><span class="result-info-val">${elapsed}초</span></div>`;
+  document.querySelectorAll('.btn-star').forEach(b => b.classList.remove('active'));
+  document.getElementById('resultModal').classList.add('open');
+}
+
+// ── 사진 보관함 저장 ──
+async function saveToGallery() {
+  if (!lastResult) return;
+  try {
+    const dataUrl = `data:${lastResult.mime};base64,${lastResult.base64}`;
+    // 모바일: 링크 다운로드 트리거
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `ai_workflow_${Date.now()}.jpg`;
+    link.click();
+    showToast('저장됐습니다 📷');
+  } catch(e) {
+    showToast('저장 실패: ' + e.message);
+  }
+}
+
+// ── 이력 ──
+function addLog(type, elapsed, model) {
+  const list = document.getElementById('logList');
+  if (list.querySelector('.empty-state')) list.innerHTML = '';
+  const now = new Date();
+  const t = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const item = document.createElement('div');
+  item.className = 'log-item';
+  item.innerHTML = `
+    <div class="log-item-top">
+      <span class="log-item-proc">${PROCESS_CONFIG[currentProcess].label}</span>
+      <span class="log-item-status ${type}">${type === 'ok' ? '✓ 성공' : '✗ 실패'}</span>
+    </div>
+    <div class="log-item-bottom">
+      <span>${t}</span><span>${model.replace('gemini-','')}</span><span>${elapsed}초</span>
+    </div>`;
+  list.prepend(item);
+}
+
+// ── 통계 ──
+const MODEL_COST_USD = {
+  'gemini-3.1-flash-image':         0.067,
+  'gemini-3.1-flash-image-preview': 0.067,
+  'gemini-3-pro-image':             0.134,
+  'gemini-3-pro-image-preview':     0.134,
+};
+const USD_TO_KRW = 1380;
+
+function updateStat(success, elapsed) {
+  const model = document.getElementById('modelSelect').value;
+  const costUsd = success ? (MODEL_COST_USD[model] || 0.067) : 0;
+  const costKrw = Math.round(costUsd * USD_TO_KRW);
+  sessionStat.runs++;
+  if (success) { sessionStat.ok++; sessionStat.totalCost += costKrw; }
+  else sessionStat.err++;
+  sessionStat.totalTime += elapsed;
+  if (!statByProc[currentProcess]) statByProc[currentProcess] = { runs:0, ok:0 };
+  statByProc[currentProcess].runs++;
+  if (success) statByProc[currentProcess].ok++;
+  return { costUsd, costKrw };
+}
+
+function updateStatUI() {
+  document.getElementById('statRuns').textContent = sessionStat.runs;
+  document.getElementById('statOk').textContent = sessionStat.ok;
+  document.getElementById('statCost').textContent = '₩' + sessionStat.totalCost;
+  document.getElementById('statAvg').textContent = sessionStat.runs ? (sessionStat.totalTime/sessionStat.runs).toFixed(1)+'s' : '—';
+  const byProc = document.getElementById('statByProcess');
+  byProc.innerHTML = '';
+  Object.entries(statByProc).forEach(([proc, s]) => {
+    const card = document.createElement('div');
+    card.className = 'log-item';
+    card.innerHTML = `
+      <div class="log-item-top">
+        <span class="log-item-proc">${PROCESS_CONFIG[proc]?.label || proc}</span>
+        <span class="log-item-status ok">${s.ok}/${s.runs}</span>
+      </div>
+      <div class="log-item-bottom"><span>성공률 ${s.runs ? Math.round(s.ok/s.runs*100) : 0}%</span></div>`;
+    byProc.appendChild(card);
+  });
+  if (!Object.keys(statByProc).length) {
+    byProc.innerHTML = '<div class="empty-state"><span class="empty-icon">📊</span><div class="empty-text">실행 후 통계가 표시됩니다.</div></div>';
+  }
+}
+
+// ── 설정 ──
+function openSettings() {
+  document.getElementById('apikeyInput').value = config.apiKey || '';
+  document.getElementById('notionKeyInput').value = config.notionKey || '';
+  document.getElementById('settingsPw').value = config.promptPassword || '';
+  document.getElementById('settingsRetry').value = String(config.retryCount ?? 1);
+  document.getElementById('link1').checked = !!(config.autoLinks?.['pentouch→coloring']);
+  document.getElementById('link2').checked = !!(config.autoLinks?.['coloring→bgcoloring']);
+  document.getElementById('link3').checked = !!(config.autoLinks?.['bglineart→bgcoloring']);
+  updateApikeyDisplay();
+  document.getElementById('settingsModal').classList.add('open');
+}
+
+function updateApikeyDisplay() {
+  const key = config.apiKey || '';
+  document.getElementById('apikeyDisplay').textContent = key ? key.slice(0,4) + '****' + key.slice(-4) : '미설정';
+}
+
+function saveSettings() {
+  config.apiKey = document.getElementById('apikeyInput').value.trim();
+  config.notionKey = document.getElementById('notionKeyInput').value.trim();
+  config.promptPassword = document.getElementById('settingsPw').value.trim();
+  config.retryCount = parseInt(document.getElementById('settingsRetry').value);
+  config.autoLinks = {
+    'pentouch→coloring':    document.getElementById('link1').checked,
+    'coloring→bgcoloring':  document.getElementById('link2').checked,
+    'bglineart→bgcoloring': document.getElementById('link3').checked,
+  };
+  if (!config.promptPassword) promptUnlocked = false;
+  saveConfig(config);
+  updateApikeyDisplay();
+  applyPromptLock();
+  document.getElementById('settingsModal').classList.remove('open');
+  showToast('설정이 저장됐습니다');
+}
+
+// ── 노션 로그 ──
+const NOTION_DS_ID = '36c290c1-d2dc-40e6-890c-6f6063d14d1f';
+const PROCESS_LABEL = { pentouch:'펜터치', coloring:'인물채색', bglineart:'배경선화', bgcoloring:'배경채색', lora:'LoRA' };
+
+async function sendNotionLog({ status, elapsed, model, errDetail, costKrw = 0, costUsd = 0, evalResult, rating, isEval }) {
+  const key = config.notionKey;
+  if (!key) return;
+  const now = new Date();
+  const procLabel = PROCESS_LABEL[currentProcess] || currentProcess;
+  const cutNumber = document.getElementById('cutNumber')?.value.trim() || '';
+  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+  let title;
+  if (isEval) {
+    const evalLabel = evalResult === 'pass' ? 'Pass' : 'Fail';
+    const ratingStr = rating > 0 ? ` ★${rating}` : '';
+    title = `[${procLabel}] 평가: ${evalLabel}${ratingStr} — ${timeStr}`;
+  } else {
+    title = `[${procLabel}] ${status === '성공' ? '성공' : '실패'} — ${timeStr}`;
+  }
+
+  const properties = {
+    '제목':        { title: [{ text: { content: title } }] },
+    '공정':        { select: { name: procLabel } },
+    '상태':        { select: { name: status } },
+    '모델':        { select: { name: model } },
+    '소요시간(초)': { number: parseFloat(elapsed) || 0 },
+    '카테고리':    { select: { name: isEval ? '평가' : (status === '성공' ? '실행' : '오류') } },
+    '날짜':        { date: { start: now.toISOString(), end: null } },
+    '오류상세':    { rich_text: [{ text: { content: errDetail || '' } }] },
+    '비용(원)':    { number: costKrw },
+    '비용(USD)':   { number: costUsd },
+    // TODO: Notion DB에 '사용자ID' (Text) 속성 추가 후 아래 주석 해제
+    // '사용자ID':  { rich_text: [{ text: { content: getCurrentUserId() } }] },
+  };
+  if (cutNumber) properties['컷번호'] = { rich_text: [{ text: { content: cutNumber } }] };
+  if (rating != null) properties['별점'] = { number: rating };
+  if (evalResult) properties['평가결과'] = { select: { name: evalResult === 'pass' ? 'Pass' : 'Fail' } };
+
+  const body = {
+    parent: { database_id: NOTION_DS_ID },
+    properties
+  };
+  try {
+    const res = await fetch('https://notion-proxy.firewood2000.workers.dev/v1/pages', {
+      method: 'POST',
+      headers: {
+        'X-Notion-Key': key,
+        'Content-Type': 'application/json',
+        'Notion-Version': '2022-06-28',
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) console.warn('노션 로그 실패:', await res.text()
+);
+  } catch (e) {
+    console.warn('노션 로그 오류:', e);
+  }
+}
+</script>
+
+<!-- ── 오류 로그 패널 ── -->
+<style>
+#_errbtn{position:fixed;bottom:16px;right:16px;z-index:9999;background:#1a1a1f;border:1px solid #444;color:#888;font-size:11px;padding:5px 12px;border-radius:20px;cursor:pointer;font-family:monospace;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#_errbtn.has-err{border-color:#c05050;color:#e07070;background:#1f1010}
+#_errpanel{display:none;position:fixed;bottom:50px;right:16px;z-index:9998;width:380px;max-height:280px;background:#0f0f15;border:1px solid #3a3a3a;border-radius:8px;overflow:hidden;flex-direction:column;font-family:monospace;font-size:11px;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+#_errpanel.open{display:flex}
+#_errhead{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#1a1a2a;border-bottom:1px solid #2a2a3a;flex-shrink:0}
+#_errhead span{flex:1;color:#8888aa;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+#_errhead button{background:none;border:1px solid #333;color:#666;font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:monospace;transition:all .1s}
+#_errhead button:hover{color:#ccc;border-color:#666}
+#_errbody{overflow-y:auto;flex:1;padding:6px}
+.err-entry{padding:6px 8px;border-bottom:1px solid #1e1e28;line-height:1.4}
+.err-entry:last-child{border-bottom:none}
+.err-meta{color:#555;font-size:10px;margin-bottom:3px}
+.err-msg{word-break:break-all;color:#e09090}
+</style>
+<button id="_errbtn" onclick="window._errToggle()">⚠ 오류 0</button>
+<div id="_errpanel">
+  <div id="_errhead">
+    <span>오류 로그</span>
+    <button onclick="window._errCopy()">복사</button>
+    <button onclick="window._errClear()">지우기</button>
+    <button onclick="window._errToggle()">✕</button>
+  </div>
+  <div id="_errbody"><div style="color:#444;padding:8px 10px">오류 없음</div></div>
+</div>
+<script>
+(function(){
+  var errs=[],open=false;
+  function add(msg,src,line){
+    var t=new Date().toLocaleTimeString('ko-KR');
+    errs.push({t:t,msg:String(msg),src:src||'',line:line||''});
+    render();
+    if(!open)toggle();
+  }
+  function render(){
+    var btn=document.getElementById('_errbtn');
+    var body=document.getElementById('_errbody');
+    if(btn){btn.textContent='⚠ 오류 '+errs.length;btn.className=errs.length?'has-err':'';}
+    if(!body)return;
+    if(!errs.length){body.innerHTML='<div style="color:#444;padding:8px 10px">오류 없음</div>';return;}
+    body.innerHTML=errs.slice().reverse().map(function(e){
+      return '<div class="err-entry"><div class="err-meta">'+e.t+(e.src?' \xb7 '+e.src+(e.line?':'+e.line:''):'')+'</div><div class="err-msg">'+e.msg+'</div></div>';
+    }).join('');
+  }
+  function toggle(){open=!open;var p=document.getElementById('_errpanel');if(p)p.classList.toggle('open',open);}
+  window._errToggle=toggle;
+  window._errClear=function(){errs=[];render();};
+  window._errCopy=function(){
+    var txt=errs.map(function(e){return '['+e.t+'] '+(e.src||'')+(e.line?':'+e.line:'')+'\n'+e.msg;}).join('\n\n---\n');
+    if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){alert('복사됨');});}
+    else{var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);alert('복사됨');}
+  };
+  window.onerror=function(msg,src,line){add(msg,src?src.split('/').pop():'',line);return false;};
+  window.addEventListener('unhandledrejection',function(e){add(e.reason&&e.reason.message?e.reason.message:String(e.reason),'Promise','');});
+  var _ce=console.error;
+  console.error=function(){var a=Array.prototype.slice.call(arguments);add(a.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);}).join(' '),'console','');_ce.apply(console,arguments);};
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>작가실 런처</title>
+<style>
+  :root {
+    --bg: #0d0d18;
+    --surface: #12121e;
+    --surface2: #1a1a2e;
+    --border: #252540;
+    --accent: #7c9fff;
+    --accent-dim: #3a5aaa;
+    --text: #e0e0e0;
+    --text-dim: #6a6a8a;
+    --text-mid: #aaaacc;
+    --danger: #c0392b;
+    --success: #4a7a5a;
+    --radius: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* 헤더 */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .header-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: var(--radius);
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .btn:hover {
+    border-color: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .btn-primary {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim);
+    color: #fff;
+  }
+
+  .btn-primary:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .btn-danger {
+    border-color: transparent;
+    color: var(--text-dim);
+  }
+
+  .btn-danger:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  /* 메인 */
+  .main {
+    padding: 32px 28px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  /* 섹션 라벨 */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* 앱 그리드 */
+  .app-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+
+  .app-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .app-card:hover {
+    border-color: var(--accent-dim);
+    background: var(--surface2);
+    transform: translateY(-1px);
+  }
+
+  .app-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .app-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .app-card-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .app-card:hover .app-card-actions {
+    opacity: 1;
+  }
+
+  .icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: all 0.15s;
+  }
+
+  .icon-btn:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .icon-btn.delete:hover {
+    color: var(--danger);
+  }
+
+  .app-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 10px;
+  }
+
+  .app-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .app-meta {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .app-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  /* 빈 상태 */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+  }
+
+  .empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.4;
+  }
+
+  .empty-state-text {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .empty-state-sub {
+    font-size: 12px;
+    margin-bottom: 20px;
+  }
+
+  /* 모달 */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.open {
+    display: flex;
+  }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    width: 480px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+
+  .modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+  }
+
+  .form-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .form-input:focus {
+    border-color: var(--accent-dim);
+  }
+
+  .form-input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .emoji-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    text-align: center;
+    transition: all 0.15s;
+  }
+
+  .emoji-btn:hover, .emoji-btn.selected {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .tag-input-wrap {
+    display: flex;
+    gap: 8px;
+  }
+
+  .tag-select {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 10px 12px;
+    outline: none;
+  }
+
+  .modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* 토스트 */
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transition: all 0.2s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 200;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* 관리자 배지 */
+  .admin-badge {
+    font-size: 9px;
+    background: var(--accent-dim);
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+
+  /* 권한 표시 */
+  .permission-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .permission-row:last-child {
+    border-bottom: none;
+  }
+
+  .toggle {
+    width: 36px;
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle.on {
+    background: var(--accent-dim);
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    transition: left 0.2s;
+  }
+
+  .toggle.on::after {
+    left: 19px;
+  }
+
+  /* 드래그 앤 드롭 */
+  .app-card[draggable="true"] { cursor: default; }
+  .app-card.dragging { opacity: 0.35; border-style: dashed; }
+  .app-card.drag-over { border-color: var(--accent); background: var(--surface2); transform: translateY(-2px); }
+  .drag-handle {
+    color: var(--text-dim);
+    font-size: 14px;
+    cursor: grab;
+    padding: 4px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    user-select: none;
+    transition: color 0.15s;
+  }
+  .drag-handle:hover { color: var(--accent); }
+  .drag-handle:active { cursor: grabbing; }
+
+  /* 파이프라인 섹션 */
+  .pipeline {
+    padding: 28px 28px 0;
+    margin-bottom: 8px;
+  }
+  .pipeline-title {
+    font-size: 10px; letter-spacing: 0.12em; color: var(--text-dim);
+    text-transform: uppercase; font-weight: 700; margin-bottom: 16px;
+  }
+  .pipeline-steps {
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .pipeline-step {
+    display: flex; gap: 0; position: relative;
+  }
+  .pipeline-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 15px; top: 36px;
+    width: 1px; height: calc(100% - 4px);
+    background: var(--border);
+  }
+  .pipeline-step-left {
+    display: flex; flex-direction: column; align-items: center;
+    flex-shrink: 0; width: 32px; padding-top: 6px;
+  }
+  .pipeline-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent-dim); border: 2px solid var(--accent);
+    flex-shrink: 0; position: relative; z-index: 1;
+  }
+  .pipeline-dot.inactive {
+    background: var(--surface2); border-color: var(--border);
+  }
+  .pipeline-step-body {
+    flex: 1; padding: 4px 0 20px 12px;
+  }
+  .pipeline-step-num {
+    font-size: 9px; color: var(--accent); letter-spacing: 0.1em;
+    text-transform: uppercase; font-weight: 700; margin-bottom: 2px;
+  }
+  .pipeline-step-num.inactive { color: var(--text-dim); }
+  .pipeline-step-name {
+    font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px;
+  }
+  .pipeline-step-role {
+    font-size: 11px; color: var(--accent); margin-bottom: 4px; font-weight: 600;
+  }
+  .pipeline-step-desc {
+    font-size: 11px; color: var(--text-dim); line-height: 1.6;
+  }
+  .pipeline-step-badge {
+    display: inline-block; margin-top: 6px;
+    font-size: 9px; padding: 2px 7px; border-radius: 3px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-dim); letter-spacing: 0.05em;
+  }
+  .pipeline-step-badge.no-app {
+    border-color: #3a3a20; color: #8a8a40;
+  }
+  .pipeline-divider {
+    border: none; border-top: 1px solid var(--border);
+    margin: 0 28px 20px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-title">작가실</div>
+    <div class="header-sub" id="appCount">앱 0개</div>
+  </div>
+  <div class="header-right">
+    <span class="admin-badge">관리자</span>
+    <button class="btn" onclick="openModal('settings')">⚙ 설정</button>
+    <button class="btn btn-primary" onclick="openModal('add')">+ 앱 추가</button>
+  </div>
+</div>
+
+<div class="pipeline">
+  <div class="pipeline-title">시나리오 집필 파이프라인</div>
+  <div class="pipeline-steps">
+
+    <div class="pipeline-step">
+      <div class="pipeline-step-left"><div class="pipeline-dot"></div></div>
+      <div class="pipeline-step-body">
+        <div class="pipeline-step-num">STEP 1 — 집단창의성 도구</div>
+        <div class="pipeline-step-role">아이디어 검증</div>
+        <div class="pipeline-step-desc">시놉시스 아이디어를 Gemini, GPT, Claude가 동시에 평가합니다. 레드팀 공격, 가중 투표, 최종 시놉시스 생성까지 자동으로 진행됩니다.</div>
+        <span class="pipeline-step-badge">collective_creativity_tool.html</span>
+      </div>
+    </div>
+
+    <div class="pipeline-step">
+      <div class="pipeline-step-left"><div class="pipeline-dot"></div></div>
+      <div class="pipeline-step-body">
+        <div class="pipeline-step-num">STEP 2 — 연구 워크플로우 앱</div>
+        <div class="pipeline-step-role">세계관·설정·자료 축적</div>
+        <div class="pipeline-step-desc">작품에 필요한 자료를 조사축 단위로 분류하고 AI별로 수집합니다.</div>
+        <span class="pipeline-step-badge">research_v3.html</span>
+      </div>
+    </div>
+
+    <div class="pipeline-step">
+      <div class="pipeline-step-left"><div class="pipeline-dot inactive"></div></div>
+      <div class="pipeline-step-body">
+        <div class="pipeline-step-num inactive">STEP 3 — Claude 프로젝트 방</div>
+        <div class="pipeline-step-role">화별 초안 설계</div>
+        <div class="pipeline-step-desc">플롯 → 캐릭터 → 에피소드 → 회차 순서로 설계합니다. 이 단계의 결과물이 작가실의 입력값이 됩니다.</div>
+        <span class="pipeline-step-badge no-app">별도 앱 없음 — Claude 프로젝트 방 (시나리오 1~4단계)</span>
+      </div>
+    </div>
+
+    <div class="pipeline-step">
+      <div class="pipeline-step-left"><div class="pipeline-dot"></div></div>
+      <div class="pipeline-step-body">
+        <div class="pipeline-step-num">STEP 4 — 작가실</div>
+        <div class="pipeline-step-role">초고 집필</div>
+        <div class="pipeline-step-desc">화별 장면 초안을 넣으면 Gemini 자료수집 → GPT 서사보강 → Claude 초고집필 → GPT 검수 → 작가 판단 → Claude 재집필 순서로 자동 진행됩니다. 결과물은 Notion에 저장됩니다.</div>
+        <span class="pipeline-step-badge">writer-room.html</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+<hr class="pipeline-divider">
+<div class="main">
+  <div class="section-label">앱 목록</div>
+  <div class="app-grid" id="appGrid"></div>
+</div>
+
+<!-- 앱 추가/수정 모달 -->
+<div class="modal-overlay" id="modalAdd">
+  <div class="modal">
+    <div class="modal-title" id="modalAddTitle">앱 추가</div>
+
+    <div class="form-group">
+      <label class="form-label">앱 이름 *</label>
+      <input class="form-input" id="inputName" placeholder="예: AI 제작 워크플로우">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">설명</label>
+      <input class="form-input" id="inputDesc" placeholder="한 줄 설명">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">파일 경로 또는 URL *</label>
+      <input class="form-input" id="inputPath" placeholder="예: index.html 또는 https://...">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">카테고리</label>
+      <div class="tag-input-wrap">
+        <select class="tag-select" id="inputTag">
+          <option value="그림">🎨 그림</option>
+          <option value="시나리오">✍️ 시나리오</option>
+          <option value="리서치">🔍 리서치</option>
+          <option value="집필">📖 집필</option>
+          <option value="관리">📊 관리</option>
+          <option value="기타">📦 기타</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">아이콘</label>
+      <div class="emoji-grid" id="emojiGrid"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('add')">취소</button>
+      <button class="btn btn-primary" onclick="saveApp()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 설정 모달 -->
+<div class="modal-overlay" id="modalSettings">
+  <div class="modal">
+    <div class="modal-title">설정</div>
+
+    <div class="section-label" style="margin-bottom:12px;">관리자 비밀번호</div>
+    <div class="form-group">
+      <input class="form-input" id="inputAdminPw" type="password" placeholder="관리자 비밀번호 설정 (선택)">
+    </div>
+
+    <div class="section-label" style="margin-top:20px;margin-bottom:12px;">데이터</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button class="btn" onclick="exportData()" style="flex:1;">JSON 내보내기</button>
+      <button class="btn" onclick="importTrigger()" style="flex:1;">JSON 가져오기</button>
+    </div>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('settings')">닫기</button>
+      <button class="btn btn-primary" onclick="saveSettings()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const EMOJIS = ['🎨','✍️','🔍','📖','📊','📦','🖼️','🎬','🧠','💡','⚡','🔧','📂','🗂️','📝','🎯'];
+const STORAGE_KEY = 'launcher_apps_v1';
+
+// ── 사용자 식별 ──
+// 구독제 전환 시: 로그인 후 localStorage.setItem('app_user_id', 서버발급ID) 만 추가하면 전체 앱에 반영됨
+function getCurrentUserId() {
+  return localStorage.getItem('app_user_id') || 'local';
+}
+
+let apps = [];
+let editingId = null;
+let selectedEmoji = '📦';
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    apps = raw ? JSON.parse(raw) : [];
+  } catch {
+    apps = [];
+  }
+
+  // 기본 앱 자동 등록 (최초 1회) — 파이프라인 순서
+  if (apps.length === 0) {
+    apps = [
+      { id: uid(), user_id: getCurrentUserId(), name: '집단창의성 도구', desc: '시나리오 아이디어 집단 개발', path: 'collective_creativity_tool.html', tag: '시나리오', icon: '🧠', lastOpen: null },
+      { id: uid(), user_id: getCurrentUserId(), name: '리서치 워크플로우', desc: '자료 수집 및 정리', path: 'research_v3.html', tag: '리서치', icon: '🔍', lastOpen: null },
+      { id: uid(), user_id: getCurrentUserId(), name: '작가실 스텝업', desc: '시나리오 멀티 에이전트 입출력기', path: 'writer-room.html', tag: '시나리오', icon: '✍️', lastOpen: null },
+      { id: uid(), user_id: getCurrentUserId(), name: 'Writing Studio', desc: '집필실 — 시나리오·웹소설 작업', path: 'writing_studio_v2_7.html', tag: '집필', icon: '📖', lastOpen: null },
+      { id: uid(), user_id: getCurrentUserId(), name: 'AI 워크플로우', desc: '웹툰 작화 — 이미지 생성 파이프라인', path: 'Ai-Workflow).html', tag: '그림', icon: '🎨', lastOpen: null },
+    ];
+    save();
+  }
+
+  migrateIfNeeded();
+  render();
+  initDragDrop();
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function render() {
+  const grid = document.getElementById('appGrid');
+  document.getElementById('appCount').textContent = `앱 ${apps.length}개`;
+
+  if (apps.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;">
+        <div class="empty-state-icon">📦</div>
+        <div class="empty-state-text">등록된 앱이 없습니다</div>
+        <div class="empty-state-sub">오른쪽 상단에서 앱을 추가하세요</div>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = apps.map(app => `
+    <div class="app-card" draggable="true" data-id="${app.id}" onclick="openApp('${app.id}')">
+      <div class="app-card-header">
+        <div class="app-icon">${app.icon}</div>
+        <div class="app-card-actions">
+          <span class="drag-handle" onclick="event.stopPropagation()" title="드래그하여 순서 변경">⠿</span>
+          <button class="icon-btn" onclick="event.stopPropagation();editApp('${app.id}')" title="수정">✏️</button>
+          <button class="icon-btn delete" onclick="event.stopPropagation();deleteApp('${app.id}')" title="삭제">🗑</button>
+        </div>
+      </div>
+      <div class="app-name">${app.name}</div>
+      <div class="app-desc">${app.desc || ''}</div>
+      <div class="app-meta">
+        <span class="app-tag">${app.tag}</span>
+        ${app.lastOpen ? `<span>최근: ${formatDate(app.lastOpen)}</span>` : '<span>미실행</span>'}
+      </div>
+    </div>
+  `).join('');
+}
+
+function openApp(id) {
+  const app = apps.find(a => a.id === id);
+  if (!app) return;
+  app.lastOpen = Date.now();
+  save();
+  render();
+  window.open(app.path, '_blank');
+}
+
+function openModal(type) {
+  if (type === 'add') {
+    editingId = null;
+    document.getElementById('modalAddTitle').textContent = '앱 추가';
+    document.getElementById('inputName').value = '';
+    document.getElementById('inputDesc').value = '';
+    document.getElementById('inputPath').value = '';
+    document.getElementById('inputTag').value = '기타';
+    selectedEmoji = '📦';
+    renderEmoji();
+    document.getElementById('modalAdd').classList.add('open');
+  } else if (type === 'settings') {
+    document.getElementById('modalSettings').classList.add('open');
+  }
+}
+
+function closeModal(type) {
+  document.getElementById(type === 'add' ? 'modalAdd' : 'modalSettings').classList.remove('open');
+}
+
+function renderEmoji() {
+  document.getElementById('emojiGrid').innerHTML = EMOJIS.map(e => `
+    <div class="emoji-btn ${e === selectedEmoji ? 'selected' : ''}" onclick="selectEmoji('${e}')">${e}</div>
+  `).join('');
+}
+
+function selectEmoji(e) {
+  selectedEmoji = e;
+  renderEmoji();
+}
+
+function saveApp() {
+  const name = document.getElementById('inputName').value.trim();
+  const path = document.getElementById('inputPath').value.trim();
+  if (!name || !path) { showToast('이름과 경로는 필수입니다'); return; }
+
+  if (editingId) {
+    const idx = apps.findIndex(a => a.id === editingId);
+    if (idx !== -1) {
+      apps[idx] = { ...apps[idx], name, desc: document.getElementById('inputDesc').value.trim(), path, tag: document.getElementById('inputTag').value, icon: selectedEmoji };
+    }
+  } else {
+    apps.push({ id: uid(), name, desc: document.getElementById('inputDesc').value.trim(), path, tag: document.getElementById('inputTag').value, icon: selectedEmoji, lastOpen: null });
+  }
+
+  save();
+  render();
+  closeModal('add');
+  showToast(editingId ? '수정되었습니다' : '앱이 추가되었습니다');
+}
+
+function editApp(id) {
+  const app = apps.find(a => a.id === id);
+  if (!app) return;
+  editingId = id;
+  document.getElementById('modalAddTitle').textContent = '앱 수정';
+  document.getElementById('inputName').value = app.name;
+  document.getElementById('inputDesc').value = app.desc || '';
+  document.getElementById('inputPath').value = app.path;
+  document.getElementById('inputTag').value = app.tag;
+  selectedEmoji = app.icon;
+  renderEmoji();
+  document.getElementById('modalAdd').classList.add('open');
+}
+
+function deleteApp(id) {
+  if (!confirm('이 앱을 목록에서 제거하시겠습니까?')) return;
+  apps = apps.filter(a => a.id !== id);
+  save();
+  render();
+  showToast('제거되었습니다');
+}
+
+function saveSettings() {
+  closeModal('settings');
+  showToast('설정이 저장되었습니다');
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify({ apps }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `launcher_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  showToa
+st('내보내기 완료');
+}
+
+function importTrigger() {
+  document.getElementById('importFile').click();
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.apps) {
+        apps = [...apps, ...data.apps.filter(na => !apps.find(a => a.id === na.id))];
+        save();
+        render();
+        showToast('가져오기 완료');
+      }
+    } catch {
+      showToast('파일 형식이 올바르지 않습니다');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function formatDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = Math.floor((now - d) / 60000);
+  if (diff < 1) return '방금';
+  if (diff < 60) return `${diff}분 전`;
+  if (diff < 1440) return `${Math.floor(diff/60)}시간 전`;
+  return `${Math.floor(diff/1440)}일 전`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function migrateIfNeeded() {
+  const MIGRATE_KEY = 'launcher_migrated_v2';
+  if (localStorage.getItem(MIGRATE_KEY)) return;
+  if (!apps.find(a => a.path && a.path.includes('Ai-Workflow'))) {
+    apps.push({ id: uid(), user_id: getCurrentUserId(), name: 'AI 워크플로우', desc: '웹툰 작화 — 이미지 생성 파이프라인', path: 'Ai-Workflow).html', tag: '그림', icon: '🎨', lastOpen: null });
+  }
+  apps.forEach(a => { if (!a.user_id) a.user_id = getCurrentUserId(); });
+  const ORDER = ['collective_creativity_tool', 'research_v3', 'writer-room', 'writing_studio', 'Ai-Workflow'];
+  apps.sort((a, b) => {
+    const ai = ORDER.findIndex(p => a.path && a.path.includes(p));
+    const bi = ORDER.findIndex(p => b.path && b.path.includes(p));
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+  save();
+  localStorage.setItem(MIGRATE_KEY, '1');
+}
+
+function initDragDrop() {
+  const grid = document.getElementById('appGrid');
+  let draggingId = null;
+  grid.addEventListener('dragstart', e => {
+    const card = e.target.closest('.app-card');
+    if (!card) return;
+    draggingId = card.dataset.id;
+    setTimeout(() => card.classList.add('dragging'), 0);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  grid.addEventListener('dragend', e => {
+    document.querySelectorAll('.app-card.dragging').forEach(el => el.classList.remove('dragging'));
+    document.querySelectorAll('.app-card.drag-over').forEach(el => el.classList.remove('drag-over'));
+    draggingId = null;
+  });
+  grid.addEventListener('dragover', e => {
+    e.preventDefault();
+    const card = e.target.closest('.app-card');
+    if (!card || card.dataset.id === draggingId) return;
+    document.querySelectorAll('.app-card.drag-over').forEach(el => el.classList.remove('drag-over'));
+    card.classList.add('drag-over');
+    e.dataTransfer.dropEffect = 'move';
+  });
+  grid.addEventListener('dragleave', e => {
+    const card = e.target.closest('.app-card');
+    if (card && !card.contains(e.relatedTarget)) card.classList.remove('drag-over');
+  });
+  grid.addEventListener('drop', e => {
+    e.preventDefault();
+    const targetCard = e.target.closest('.app-card');
+    if (!targetCard || !draggingId || targetCard.dataset.id === draggingId) return;
+    targetCard.classList.remove('drag-over');
+    const fromIdx = apps.findIndex(a => a.id === draggingId);
+    const toIdx = apps.findIndex(a => a.id === targetCard.dataset.id);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = apps.splice(fromIdx, 1);
+    apps.splice(toIdx, 0, moved);
+    save();
+    render();
+  });
+}
+
+migrateIfNeeded();
+load();
+render();
+initDragDrop();
+</script>
+
+<!-- ── 오류 로그 패널 ── -->
+<style>
+#_errbtn{position:fixed;bottom:16px;right:16px;z-index:9999;background:#1a1a1f;border:1px solid #444;color:#888;font-size:11px;padding:5px 12px;border-radius:20px;cursor:pointer;font-family:monospace;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#_errbtn.has-err{border-color:#c05050;color:#e07070;background:#1f1010}
+#_errpanel{display:none;position:fixed;bottom:50px;right:16px;z-index:9998;width:380px;max-height:280px;background:#0f0f15;border:1px solid #3a3a3a;border-radius:8px;overflow:hidden;flex-direction:column;font-family:monospace;font-size:11px;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+#_errpanel.open{display:flex}
+#_errhead{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#1a1a2a;border-bottom:1px solid #2a2a3a;flex-shrink:0}
+#_errhead span{flex:1;color:#8888aa;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+#_errhead button{background:none;border:1px solid #333;color:#666;font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:monospace;transition:all .1s}
+#_errhead button:hover{color:#ccc;border-color:#666}
+#_errbody{overflow-y:auto;flex:1;padding:6px}
+.err-entry{padding:6px 8px;border-bottom:1px solid #1e1e28;line-height:1.4}
+.err-entry:last-child{border-bottom:none}
+.err-meta{color:#555;font-size:10px;margin-bottom:3px}
+.err-msg{word-break:break-all;color:#e09090}
+</style>
+<button id="_errbtn" onclick="window._errToggle()">⚠ 오류 0</button>
+<div id="_errpanel">
+  <div id="_errhead">
+    <span>오류 로그</span>
+    <button onclick="window._errCopy()">복사</button>
+    <button onclick="window._errClear()">지우기</button>
+    <button onclick="window._errToggle()">✕</button>
+  </div>
+  <div id="_errbody"><div style="color:#444;padding:8px 10px">오류 없음</div></div>
+</div>
+<script>
+(function(){
+  var errs=[],open=false;
+  function add(msg,src,line){
+    var t=new Date().toLocaleTimeString('ko-KR');
+    errs.push({t:t,msg:String(msg),src:src||'',line:line||''});
+    render();
+    if(!open)toggle();
+  }
+  function render(){
+    var btn=document.getElementById('_errbtn');
+    var body=document.getElementById('_errbody');
+    if(btn){btn.textContent='⚠ 오류 '+errs.length;btn.className=errs.length?'has-err':'';}
+    if(!body)return;
+    if(!errs.length){body.innerHTML='<div style="color:#444;padding:8px 10px">오류 없음</div>';return;}
+    body.innerHTML=errs.slice().reverse().map(function(e){
+      return '<div class="err-entry"><div class="err-meta">'+e.t+(e.src?' \xb7 '+e.src+(e.line?':'+e.line:''):'')+'</div><div class="err-msg">'+e.msg+'</div></div>';
+    }).join('');
+  }
+  function toggle(){open=!open;var p=document.getElementById('_errpanel');if(p)p.classList.toggle('open',open);}
+  window._errToggle=toggle;
+  window._errClear=function(){errs=[];render();};
+  window._errCopy=function(){
+    var txt=errs.map(function(e){return '['+e.t+'] '+(e.src||'')+(e.line?':'+e.line:'')+'\n'+e.msg;}).join('\n\n---\n');
+    if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){alert('복사됨');});}
+    else{var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);alert('복사됨');}
+  };
+  window.onerror=function(msg,src,line){add(msg,src?src.split('/').pop():'',line);return false;};
+  window.addEventListener('unhandledrejection',function(e){add(e.reason&&e.reason.message?e.reason.message:String(e.reason),'Promise','');});
+  var _ce=console.error;
+  console.error=function(){var a=Array.prototype.slice.call(arguments);add(a.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);}).join(' '),'console','');_ce.apply(console,arguments);};
+})();
+</script>
+</body>
+</html>

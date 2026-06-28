@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>리서치 워크플로우</title>
+<style>
+:root {
+  --bg: #0f1117; --bg2: #1a1d27; --bg3: #252836; --border: #2e3347;
+  --accent: #6c8aff; --accent2: #a78bfa; --success: #34d399;
+  --warn: #fbbf24; --danger: #f87171;
+  --text: #e8eaf0; --text2: #9ca3b8; --text3: #6b7280;
+  --card: #1e2130; --font-size: 15px; --radius: 12px; --tab-h: 64px;
+}
+.theme-light {
+  --bg: #f0f2f8; --bg2: #ffffff; --bg3: #e8eaf0; --border: #d1d5e0;
+  --text: #1a1d27; --text2: #4b5268; --text3: #9ca3b8; --card: #ffffff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Noto Sans KR', sans-serif; font-size: var(--font-size); min-height: 100vh; overflow-x: hidden; }
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+#content { flex: 1; overflow-y: auto; padding: 16px 16px calc(var(--tab-h) + 16px); }
+
+/* 탭 네비 */
+#tabnav { position: fixed; bottom: 0; left: 0; right: 0; height: var(--tab-h); background: var(--bg2); border-top: 1px solid var(--border); display: flex; z-index: 100; }
+.tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: none; border: none; color: var(--text3); font-size: 10px; cursor: pointer; padding: 4px 2px; transition: color 0.2s; }
+.tab-btn .tab-icon { font-size: 22px; line-height: 1; }
+.tab-btn.active { color: var(--accent); }
+
+/* 설정 고정 버튼 */
+#settings-fab { position: fixed; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 50%; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 150; transition: background 0.2s; }
+#settings-fab:active { background: var(--border); }
+
+/* 헤더 */
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-right: 44px; }
+.page-title { font-size: 20px; font-weight: 700; color: var(--text); }
+.page-sub { font-size: 13px; color: var(--text3); margin-top: 2px; }
+
+/* 카드 */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+.card-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.card-meta { font-size: 12px; color: var(--text3); }
+
+/* 버튼 */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: 10px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s, transform 0.1s; white-space: nowrap; }
+.btn:active { transform: scale(0.96); opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+.btn-success { background: var(--success); color: #0f1117; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-warn { background: var(--warn); color: #0f1117; }
+.btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+.btn-full { width: 100%; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* 입력 */
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+.field input, .field textarea, .field select { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; color: var(--text); font-size: 15px; font-family: inherit; outline: none; transition: border-color 0.2s; -webkit-appearance: none; }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); }
+.field textarea { resize: vertical; min-height: 100px; line-height: 1.6; }
+.field select option { background: var(--bg2); }
+
+/* 배지 */
+.badge { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-blue { background: rgba(108,138,255,0.15); color: var(--accent); }
+.badge-green { background: rgba(52,211,153,0.15); color: var(--success); }
+.badge-yellow { background: rgba(251,191,36,0.15); color: var(--warn); }
+.badge-red { background: rgba(248,113,113,0.15); color: var(--danger); }
+.badge-gray { background: var(--bg3); color: var(--text3); }
+
+/* 진행률 */
+.progress-bar { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+
+/* 구분선 */
+.divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+/* 토스트 */
+#toast { position: fixed; bottom: calc(var(--tab-h) + 12px); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bg2); border: 1px solid var(--border); color: var(--text); padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.25s, transform 0.25s; z-index: 999; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 모달 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal-box { background: var(--bg2); border-radius: 20px 20px 0 0; width: 100%; max-height: 85vh; overflow-y: auto; padding: 20px 16px 32px; transform: translateY(20px); transition: transform 0.2s; }
+.modal-overlay.open .modal-box { transform: translateY(0); }
+.modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+.modal-close { float: right; background: var(--bg3); border: none; color: var(--text2); padding: 4px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+/* 읽기모드 카드 */
+.read-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+.read-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.read-content { font-size: 15px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+
+/* 별점 */
+.star-rating { display:flex; gap:3px; margin:6px 0; }
+.star { font-size:18px; cursor:pointer; color:var(--border); transition:color 0.15s; line-height:1; }
+.star.on { color:var(--warn); }
+.star:hover, .star:hover ~ .star { color:var(--border); }
+.star-rating:hover .star { color:var(--warn); }
+.star-rating .star:hover ~ .star { color:var(--border); }
+
+/* AI 태그 */
+.ai-tag { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; margin: 3px; cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s; }
+.ai-tag.claude { background: rgba(108,138,255,0.15); color: var(--accent); }
+.ai-tag.gemini { background: rgba(52,211,153,0.15); color: var(--success); }
+.ai-tag.gpt { background: rgba(251,191,36,0.15); color: var(--warn); }
+.ai-tag.selected { border-color: currentColor; }
+
+/* 축 카드 */
+.axis-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; overflow: hidden; }
+.axis-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.axis-name { font-size: 15px; font-weight: 600; }
+
+/* 섹션 제목 */
+.section-title { font-size: 13px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0 10px; }
+
+/* 출력 영역 */
+.output-area { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-size: 13px; color: var(--text2); line-height: 1.7; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto; }
+
+/* 설정 아이템 */
+.setting-item { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.setting-item:last-child { border-bottom: none; }
+.setting-label { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.setting-desc { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+
+/* empty state */
+.empty { text-align: center; padding: 48px 16px; color: var(--text3); }
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-text { font-size: 15px; margin-bottom: 16px; }
+
+/* 노션 버튼 */
+.notion-btn { background: linear-gradient(135deg, #6c8aff, #a78bfa); color: #fff; border: none; border-radius: 10px; padding: 12px 16px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; transition: opacity 0.15s, transform 0.1s; }
+.notion-btn:active { transform: scale(0.96); opacity: 0.85; }
+.notion-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 전체화면 읽기모드 */
+#reader-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 500; display: none; flex-direction: column; overflow: hidden; }
+#reader-overlay.open { display: flex; }
+#reader-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: var(--bg2); }
+#reader-title { font-size: 15px; font-weight: 700; }
+#reader-meta { font-size: 12px; color: var(--text3); margin-top: 2px; }
+#reader-body { flex: 1; overflow-y: auto; padding: 24px 20px 40px; max-width: 720px; width: 100%; margin: 0 auto; }
+#reader-text { font-size: 16px; line-height: 1.85; color: var(--text); word-break: break-word; }
+#reader-text h1,#reader-text h2,#reader-text h3,#reader-text h4 { color: var(--text); font-weight: 700; margin: 1.2em 0 0.5em; line-height: 1.4; }
+#reader-text h1 { font-size: 1.4em; } #reader-text h2 { font-size: 1.2em; } #reader-text h3 { font-size: 1.05em; }
+#reader-text p { margin: 0.7em 0; }
+#reader-text strong { color: var(--text); font-weight: 700; }
+#reader-text em { font-style: italic; }
+#reader-text ul,#reader-text ol { padding-left: 1.4em; margin: 0.5em 0; }
+#reader-text li { margin: 0.3em 0; }
+#reader-text code { background: var(--bg3); border-radius: 4px; padding: 2px 6px; font-size: 0.9em; font-family: monospace; }
+#reader-text pre { background: var(--bg3); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 0.8em 0; white-space: pre; }
+#reader-text pre code { background: none; padding: 0; }
+#reader-text hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+#reader-text blockquote { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--text2); margin: 0.8em 0; }
+#reader-text table { width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 14px; }
+#reader-text th,#reader-text td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+#reader-text th { background: var(--bg3); font-weight: 600; }
+#reader-close { background: var(--bg3); border: none; color: var(--text); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+/* 결과 카드 */
+.result-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; overflow: hidden; }
+.result-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.result-status { display: flex; align-items: center; gap: 6px; }
+.result-preview { font-size: 13px; color: var(--text2); line-height: 1.6; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; max-height: 120px; overflow: hidden; position: relative; }
+.result-preview::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, var(--card)); }
+
+/* 스크롤바 */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* 프롬프트 에디터 */
+.prompt-editor { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 14px; color: var(--text); font-size: 14px; font-family: inherit; outline: none; line-height: 1.7; resize: vertical; min-height: 200px; transition: border-color 0.2s; }
+.prompt-editor:focus { border-color: var(--accent); }
+
+/* 로딩 스피너 */
+.spinning { animation: spin 1s linear infinite; display: inline-block; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="content"></div>
+  <button id="settings-fab" onclick="openSettings()" title="설정">⚙️</button>
+  <nav id="tabnav">
+    <button class="tab-btn active" data-tab="projects" onclick="switchTab('projects')">
+      <span class="tab-icon">📁</span><span>프로젝트</span>
+    </button>
+    <button class="tab-btn" data-tab="plan" onclick="switchTab('plan')">
+      <span class="tab-icon">📝</span><span>기획안</span>
+    </button>
+    <button class="tab-btn" data-tab="axes" onclick="switchTab('axes')">
+      <span class="tab-icon">🔍</span><span>조사축</span>
+    </button>
+    <button class="tab-btn" data-tab="prompts" onclick="switchTab('prompts')">
+      <span class="tab-icon">✨</span><span>프롬프트</span>
+    </button>
+    <button class="tab-btn" data-tab="results" onclick="switchTab('results')">
+      <span class="tab-icon">📊</span><span>결과</span>
+    </button>
+    <button class="tab-btn" data-tab="output" onclick="switchTab('output')">
+      <span class="tab-icon">📤</span><span>출력</span>
+    </button>
+  </nav>
+</div>
+<div id="toast"></div>
+<div id="modal-overlay" class="modal-overlay" onclick="closeModal(event)">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+<div id="reader-overlay">
+  <div id="reader-header">
+    <div><div id="reader-title"></div><div id="reader-meta"></div></div>
+    <div style="display:flex;gap:8px">
+      <button id="reader-edit-toggle" onclick="toggleReaderEdit()" style="background:var(--bg3);border:none;color:var(--text);padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">✏️ 편집</button>
+      <button id="reader-save" onclick="saveReaderEdit()" style="display:none;background:var(--accent);border:none;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">💾 저장</button>
+      <button id="reader-copy" onclick="copyReaderText()" style="background:var(--bg3);border:none;color:var(--text);padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">📋 복사</button>
+      <button id="reader-close" onclick="closeReader()">✕ 닫기</button>
+    </div>
+  </div>
+  <div id="reader-body">
+    <div id="reader-text"></div>
+    <textarea id="reader-editor" style="display:none;width:100%;min-height:70vh;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;color:var(--text);font-size:16px;font-family:inherit;line-height:1.85;resize:vertical;outline:none"></textarea>
+  </div>
+</div>
+
+<script>
+// ── 사용자 식별 ──
+// 구독제 전환 시: 로그인 후 localStorage.setItem('app_user_id', 서버발급ID) 만 추가하면 전체 앱에 반영됨
+function getCurrentUserId() {
+  return localStorage.getItem('app_user_id') || 'local';
+}
+
+// ───────────────────────────────────────────
+// 상태
+// ───────────────────────────────────────────
+let state = {
+  user_id: getCurrentUserId(),
+  projects: [],
+  currentProjectId: null,
+  currentAxisId: null,
+  settings: {
+    notionProxy: 'https://notion-proxy.firewood2000.workers.dev',
+    notionToken: '',
+    notionProjectDB: 'eecb42f9-c2b3-43c9-bfdc-521502e8f8de',
+    notionAxesDB: '330d9eea-600b-4ce0-b157-61851d9b0274',
+    notionResultsDB: '1262f7115d4b4f2b9003496956c5b9bf',
+    gptApiKey: '', gptModel: 'gpt-4o',
+    geminiApiKey: '', geminiModel: 'gemini-2.5-flash',
+    claudeApiKey: '', claudeModel: 'claude-sonnet-4-6',
+    theme: 'dark', fontSize: 15
+  }
+};
+
+const STATUS_LABELS = { wait: '대기', doing: '진행중', done: '완료' };
+const STATUS_COLORS = { wait: 'badge-gray', doing: 'badge-yellow', done: 'badge-green' };
+
+// ───────────────────────────────────────────
+// 저장/로드
+// ───────────────────────────────────────────
+function save() {
+  try { localStorage.setItem('rwf_state_v5', JSON.stringify(state)); } catch(e) {}
+}
+function load() {
+  try {
+    const d = localStorage.getItem('rwf_state_v5');
+    if (d) {
+      const parsed = JSON.parse(d);
+      state = { ...state, ...parsed };
+      state.settings = { ...state.settings, ...(parsed.settings || {}) };
+    }
+    // v3/v4 데이터 마이그레이션
+    const old = localStorage.getItem('rwf_state');
+    if (old && !state.projects.length) {
+      const op = JSON.parse(old);
+      if (op.projects) state.projects = op.projects;
+      if (op.currentProjectId) state.currentProjectId = op.currentProjectId;
+      if (op.settings) state.settings = { ...state.settings, ...op.settings };
+      save();
+    }
+  } catch(e) {}
+}
+
+function currentProject() {
+  return state.projects.find(p => p.id === state.currentProjectId) || null;
+}
+function renderMd(text) {
+  if (!text) return '';
+  let t = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^#{4}\s+(.+)$/gm,'<h4>$1</h4>')
+    .replace(/^#{3}\s+(.+)$/gm,'<h3>$1</h3>')
+    .replace(/^#{2}\s+(.+)$/gm,'<h2>$1</h2>')
+    .replace(/^#{1}\s+(.+)$/gm,'<h1>$1</h1>')
+    .replace(/^---+$/gm,'<hr>')
+    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`{3}([\s\S]*?)`{3}/g,'<pre><code>$1</code></pre>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/^&gt;\s(.+)$/gm,'<blockquote>$1</blockquote>')
+    .replace(/^[\*\-]\s+(.+)$/gm,'<li>$1</li>')
+    .replace(/^\d+\.\s+(.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, s => '<ul>' + s + '</ul>');
+  t = t.split(/\n{2,}/).map(p => {
+    p = p.trim();
+    if (!p) return '';
+    if (/^<(h[1-4]|ul|ol|li|blockquote|pre|hr)/.test(p)) return p;
+    return '<p>' + p.replace(/\n/g,'<br>') + '</p>';
+  }).join('');
+  return t;
+}
+
+function stripMd(text) {
+  return (text||'')
+    .replace(/\\n/g, ' ')
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
+    .replace(/_{1,3}([^_]+)_{1,3}/g, '$1')
+    .replace(/`{1,3}[^`]*`{1,3}/g, '')
+    .replace(/^[-*>]\s+/gm, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function calcProgress(p) {
+  if (!p.axes || !p.axes.length) return 0;
+  return Math.round(p.axes.filter(a => a.status === 'done').length / p.axes.length * 100);
+}
+
+// ───────────────────────────────────────────
+// 탭 전환
+// ───────────────────────────────────────────
+let currentTab = 'projects';
+function switchTab(tab, pushHistory=true) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  const pid = state.currentProjectId || '';
+  const hash = pid ? `#${tab}/${pid}` : `#${tab}`;
+  if (pushHistory) history.pushState({ tab, pid }, '', hash);
+  else history.replaceState({ tab, pid }, '', hash);
+  render();
+}
+
+// 뒤로가기/앞으로가기 대응
+window.addEventListener('popstate', e => {
+  if (e.state) {
+    if (e.state.pid) state.currentProjectId = e.state.pid;
+    currentTab = e.state.tab || 'projects';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
+    render();
+  }
+});
+
+// ───────────────────────────────────────────
+// 토스트
+// ───────────────────────────────────────────
+let toastTimer;
+function toast(msg, dur=2200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+// ───────────────────────────────────────────
+// 복사
+// ───────────────────────────────────────────
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast('✅ 복사되었습니다')).catch(() => copyFallback(text));
+  } else { copyFallback(text); }
+}
+function copyFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); toast('✅ 복사되었습니다'); }
+  catch(e) { prompt('아래 텍스트를 직접 복사해주세요:', text); }
+  document.body.removeChild(ta);
+}
+
+// ───────────────────────────────────────────
+// 모달
+// ───────────────────────────────────────────
+function openModal(html) {
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  closeModalDirect();
+}
+function closeModalDirect() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ───────────────────────────────────────────
+// 전체화면 읽기모드
+// ───────────────────────────────────────────
+let _readerText = '';
+let _readerContext = null; // { type: 'brief'|'prompt'|'result', axId, idx }
+
+function openReader(title, meta, text, context) {
+  _readerText = text;
+  _readerContext = context || null;
+  document.getElementById('reader-title').textContent = title;
+  document.getElementById('reader-meta').textContent = meta || '';
+  document.getElementById('reader-text').innerHTML = renderMd(text);
+  document.getElementById('reader-text').style.display = 'block';
+  document.getElementById('reader-editor').style.display = 'none';
+  document.getElementById('reader-editor').value = text;
+  document.getElementById('reader-edit-toggle').textContent = '✏️ 편집';
+  document.getElementById('reader-save').style.display = 'none';
+  // 저장 가능한 컨텍스트가 없으면 편집 버튼 숨김
+  document.getElementById('reader-edit-toggle').style.display = context ? 'block' : 'none';
+  document.getElementById('reader-overlay').classList.add('open');
+}
+
+function openBriefReader() {
+  const p = currentProject(); if (!p) return;
+  openReader('기획안', p.title, p.brief || '', { type: 'brief' });
+}
+
+function toggleReaderEdit() {
+  const textEl = document.getElementById('reader-text');
+  const editorEl = document.getElementById('reader-editor');
+  const saveBtn = document.getElementById('reader-save');
+  const editBtn = document.getElementById('reader-edit-toggle');
+  const isEditing = editorEl.style.display !== 'none';
+  if (isEditing) {
+    // 편집 모드 → 읽기 모드
+    textEl.textContent = editorEl.value;
+    _readerText = editorEl.value;
+    textEl.style.display = 'block';
+    editorEl.style.display = 'none';
+    saveBtn.style.display = 'none';
+    editBtn.textContent = '✏️ 편집';
+  } else {
+    // 읽기 모드 → 편집 모드
+    editorEl.value = _readerText;
+    textEl.style.display = 'none';
+    editorEl.style.display = 'block';
+    saveBtn.style.display = 'block';
+    editBtn.textContent = '✕ 취소';
+  }
+}
+
+function saveReaderEdit() {
+  const editorEl = document.getElementById('reader-editor');
+  const newText = editorEl.value;
+  if (!_readerContext) return;
+  const p = currentProject(); if (!p) return;
+  const ctx = _readerContext;
+  if (ctx.type === 'brief') {
+    p.brief = newText;
+    save(); toast('💾 기획안 저장됨');
+  } else if (ctx.type === 'prompt') {
+    const a = p.axes.find(x => x.id === ctx.axId); if (!a) return;
+    if (a.prompts && a.prompts[ctx.idx] !== undefined) {
+      a.prompts[ctx.idx].content = newText;
+      save(); toast('💾 프롬프트 저장됨');
+    }
+  } else if (ctx.type === 'result') {
+    const a = p.axes.find(x => x.id === ctx.axId); if (!a) return;
+    if (a.results && a.results[ctx.idx] !== undefined) {
+      a.results[ctx.idx].content = newText;
+      save(); toast('💾 결과 저장됨');
+    }
+  }
+  _readerText = newText;
+  document.getElementById('reader-text').innerHTML = renderMd(newText);
+  document.getElementById('reader-text').style.display = 'block';
+  editorEl.style.display = 'none';
+  document.getElementById('reader-save').style.display = 'none';
+  document.getElementById('reader-edit-toggle').textContent = '✏️ 편집';
+  render();
+}
+
+function closeReader() {
+  document.getElementById('reader-overlay').classList.remove('open');
+}
+function copyReaderText() { copyText(_readerText); }
+
+// ───────────────────────────────────────────
+// JSON 내보내기/가져오기
+// ───────────────────────────────────────────
+function exportJSON() {
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `리서치워크플로우_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('💾 JSON 내보내기 완료');
+}
+function importJSON() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const imported = JSON.parse(ev.target.result);
+        if (imported.projects) {
+          imported.projects.forEach(ip => {
+            const existing = state.projects.find(p => p.id === ip.id);
+            if (existing) Object.assign(existing, ip);
+            else state.projects.push(ip);
+          });
+        }
+        if (imported.settings) state.settings = { ...state.settings, ...imported.settings };
+        save(); applySettings(); render();
+        toast('✅ 데이터 가져오기 완료');
+      } catch(e) { toast('❌ JSON 형식 오류'); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+// ───────────────────────────────────────────
+// GPT / Gemini / Claude API
+// ───────────────────────────────────────────
+async function callGPT(systemPrompt, userPrompt, onChunk) {
+  const key = state.settings.gptApiKey;
+  if (!key) { toast('⚠️ 설정에서 GPT API 키를 입력해주세요'); return null; }
+  const model = state.settings.gptModel || 'gpt-4o';
+  const stream = typeof onChunk === 'function';
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify({
+      model, stream,
+      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `GPT 오류 (${res.status})`);
+  }
+  if (!stream) {
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || '';
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let full = '';
+  while (true) {
+    const { done, value } = await reader.read(); if (done) break;
+    const chunk = decoder.decode(value);
+    for (const line of chunk.split('\n')) {
+      const trimmed = line.replace(/^data: /, '').trim();
+      if (!trimmed || trimmed === '[DONE]') continue;
+      try {
+        const json = JSON.parse(trimmed);
+        const delta = json.choices?.[0]?.delta?.content || '';
+        if (delta) { full += delta; onChunk(delta, full); }
+      } catch(e) {}
+    }
+  }
+  return full;
+}
+
+async function callGemini(systemPrompt, userPrompt, onChunk) {
+  const key = state.settings.geminiApiKey;
+  if (!key) { toast('⚠️ 설정에서 Gemini API 키를 입력해주세요'); return null; }
+  const model = state.settings.geminiModel || 'gemini-2.5-flash';
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }] })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Gemini 오류 (${res.status})`);
+  }
+  const data = await res.json();
+  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const text = rawText.replace(/\\n/g, '\n');
+  if (onChunk) onChunk(text, text);
+  return text;
+}
+
+async function callClaude(systemPrompt, userPrompt, onChunk) {
+  const key = state.settings.claudeApiKey;
+  if (!key) { toast('⚠️ 설정에서 Claude API 키를 입력해주세요'); return null; }
+  const model = state.settings.claudeModel || 'claude-sonnet-4-6';
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model, max_tokens: 4096,
+      messages: [{ role: 'user', content: systemPrompt + '\n\n' + userPrompt }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Claude 오류 (${res.status})`);
+  }
+  const data = await res.json();
+  const text = data?.content?.[0]?.text || '';
+  if (onChunk) onChunk(text, text);
+  return text;
+}
+
+async function callAI(assignedAI, systemPrompt, userPrompt, onChunk) {
+  const ai = (assignedAI || 'GPT').toLowerCase();
+  if (ai === 'gemini') return await callGemini(systemPrompt, userPrompt, onChunk);
+  if (ai === 'claude') return await callClaude(systemPrompt, userPrompt, onChunk);
+  return await callGPT(systemPrompt, userPrompt, onChunk);
+}
+
+// ───────────────────────────────────────────
+// 조사축 자동 설계
+// ───────────────────────────────────────────
+async function autoDesignAxes() {
+  const p = currentProject();
+  if (!p) { toast('⚠️ 프로젝트를 먼저 선택해주세요'); return; }
+  if (!p.brief) { toast('⚠️ 기획안을 먼저 입력해주세요'); return; }
+  const selectedAI = (document.getElementById('axes-ai-select')?.value || 'GPT');
+  const aiLower = selectedAI.toLowerCase();
+  if (aiLower === 'gpt' && !state.settings.gptApiKey) { toast('⚠️ 설정에서 GPT API 키를 입력해주세요'); return; }
+  if (aiLower === 'gemini' && !state.settings.geminiApiKey) { toast('⚠️ 설정에서 Gemini API 키를 입력해주세요'); return; }
+  if (aiLower === 'claude' && !state.settings.claudeApiKey) { toast('⚠️ 설정에서 Claude API 키를 입력해주세요'); return; }
+  const btn = document.getElementById('auto-axes-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 설계 중...'; }
+  const systemPrompt = `당신은 웹툰·소설 작가를 위한 리서치 설계 전문가입니다.
+기획안을 읽고 작품 제작에 필요한 리서치 조사축을 설계합니다.
+반드시 JSON 배열만 반환하고 다른 텍스트는 포함하지 마세요.
+각 항목: {"name":"축 이름","purpose":"조사 목적","output":"산출물 형태","tags":["태그1","태그2"],"assignedAI":"GPT 또는 Claude 또는 Gemini"}
+배정 기준: 법률·서사·심리분석 → Claude, 최신사례·검색·시각자료 → Gemini, 제도·통계·조직분석 → GPT`;
+  const userPrompt = `다음 기획안을 읽고 리서치 조사축 4~6개를 설계해주세요.\n\n【기획안】\n${p.brief}`;
+  try {
+    const result = await callAI(selectedAI, systemPrompt, userPrompt);
+    if (!result) return;
+    let axes;
+    try { axes = JSON.parse(result.replace(/```json|```/g, '').trim()); }
+    catch(e) { toast('❌ 축 설계 파싱 오류'); return; }
+    if (!Array.isArray(axes) || !axes.length) { toast('❌ 결과가 비어 있습니다'); return; }
+    if (!p.axes) p.axes = [];
+    let added = 0;
+    axes.forEach(a => {
+      if (!p.axes.find(x => x.name === a.name)) {
+        p.axes.push({ id: genId(), name: a.name||'새 축', purpose: a.purpose||'', output: a.output||'',
+          tags: a.tags||[], assignedAI: a.assignedAI||'GPT', model: '',
+          status: 'wait', prompts: [], results: [], createdAt: Date.now() });
+        added++;
+      }
+    });
+    save(); render(); toast(`✅ 조사축 ${added}개 자동 설계 완료`);
+    switchTab('axes');
+  } catch(e) {
+    toast('❌ GPT 오류: ' + e.message, 5000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 조사축 자동 설계'; }
+  }
+}
+
+// ───────────────────────────────────────────
+// 프롬프트 자동 생성
+// ───────────────────────────────────────────
+async function autoGeneratePrompt(axId) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x => x.id === axId); if (!a) return;
+  const ai = a.assignedAI || 'GPT';
+  const aiLower = ai.toLowerCase();
+  if (aiLower === 'gpt' && !state.settings.gptApiKey) { toast('⚠️ 설정에서 GPT API 키를 입력해주세요'); return; }
+  if (aiLower === 'gemini' && !state.settings.geminiApiKey) { toast('⚠️ 설정에서 Gemini API 키를 입력해주세요'); return; }
+  if (aiLower === 'claude' && !state.settings.claudeApiKey) { toast('⚠️ 설정에서 Claude API 키를 입력해주세요'); return; }
+  const btn = document.getElementById(`gen-btn-${axId}`);
+  const textarea = document.getElementById(`prompt-text-${axId}`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 생성 중...'; }
+  if (textarea) textarea.value = '';
+  const systemPrompt = `당신은 리서치 프롬프트 전문가입니다. 조사축 정보와 기획안을 바탕으로 ${ai}에게 전달할 리서치 프롬프트를 작성합니다. 프롬프트는 항목 나열이 아닌 자연스러운 서술형 문장으로 작성하세요. 가장 중요한 내용을 먼저 제시하고 세부 사항이 자연스럽게 이어지도록 합니다. 소제목은 꼭 필요한 경우에만 사용하고 표와 목록은 최소화하세요.`;
+  const userPrompt = `작품명은 "${p.title}"이고 장르는 ${p.genre||'미정'}입니다. 기획안 요약은 다음과 같습니다: ${(p.brief||'').slice(0,500)}
+
+이 작품의 "${a.name}" 조사축에 대한 리서치 프롬프트를 작성해주세요. 이 축의 조사 목적은 ${a.purpose||'미정'}이며, 기대하는 산출물은 ${a.output||'미정'}입니다. 관련 태그는 ${(a.tags||[]).join(', ') || '없음'}입니다.
+
+${ai}가 실제로 조사를 수행할 때 읽게 될 프롬프트를 서술형으로 작성해주세요. 역할, 작품 맥락, 조사할 내용, 결과물 형식을 자연스러운 문장으로 이어서 써주세요.`;
+  try {
+    const result = await callAI(ai, systemPrompt, userPrompt, (delta, full) => {
+      if (textarea) textarea.value = full;
+    });
+    if (result && textarea) textarea.value = result;
+    toast('✅ 프롬프트 생성 완료');
+  } catch(e) {
+    toast('❌ 오류: ' + e.message, 5000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 자동 생성'; }
+  }
+}
+
+// ───────────────────────────────────────────
+// 프롬프트 저장
+// ───────────────────────────────────────────
+function savePromptFromEditor(axId) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x => x.id === axId); if (!a) return;
+  const textarea = document.getElementById(`prompt-text-${axId}`);
+  const content = textarea?.value.trim();
+  if (!content) { toast('⚠️ 프롬프트 내용이 없습니다'); return; }
+  if (!a.prompts) a.prompts = [];
+  const ver = 'v' + (a.prompts.length + 1);
+  a.prompts.push({ version: ver, content, savedAt: Date.now() });
+  save(); renderPromptDetail(axId); toast(`💾 ${ver} 저장됨`);
+}
+
+// ───────────────────────────────────────────
+// 전체 프롬프트 생성 후 실행
+// ───────────────────────────────────────────
+async function genAllPrompts() {
+  const p = currentProject(); if (!p) return;
+  const axes = p.axes || [];
+  if (!axes.length) { toast('⚠️ 조사축이 없습니다'); return; }
+  const btn = document.getElementById('gen-all-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 프롬프트 생성 중...'; }
+  toast(`📝 ${axes.length}개 축 프롬프트 생성 중...`, 4000);
+
+  for (const a of axes) {
+    const ai = a.assignedAI || 'GPT';
+    try {
+      const systemPrompt = `당신은 리서치 프롬프트 전문가입니다. 조사축 정보와 기획안을 바탕으로 ${ai}에게 전달할 리서치 프롬프트를 작성합니다. 프롬프트는 항목 나열이 아닌 자연스러운 서술형 문장으로 작성하세요. 가장 중요한 내용을 먼저 제시하고 세부 사항이 자연스럽게 이어지도록 합니다. 소제목은 꼭 필요한 경우에만 사용하고 표와 목록은 최소화하세요.`;
+      const userPrompt = `작품명은 "${p.title}"이고 장르는 ${p.genre||'미정'}입니다. 기획안 요약은 다음과 같습니다: ${(p.brief||'').slice(0,500)}\n\n이 작품의 "${a.name}" 조사축에 대한 리서치 프롬프트를 작성해주세요. 이 축의 조사 목적은 ${a.purpose||'미정'}이며, 기대하는 산출물은 ${a.output||'미정'}입니다. 관련 태그는 ${(a.tags||[]).join(', ')||'없음'}입니다.\n\n${ai}가 실제로 조사를 수행할 때 읽게 될 프롬프트를 서술형으로 작성해주세요. 역할, 작품 맥락, 조사할 내용, 결과물 형식을 자연스러운 문장으로 이어서 써주세요.`;
+      const result = await callAI(ai, systemPrompt, userPrompt);
+      if (result) {
+        if (!a.prompts) a.prompts = [];
+        const ver = 'v' + (a.prompts.length + 1);
+        a.prompts.push({ version: ver, content: result, savedAt: Date.now() });
+      }
+    } catch(e) {
+      toast(`⚠️ [${a.name}] 프롬프트 생성 실패`, 3000);
+    }
+  }
+  save();
+  toast('✅ 전체 프롬프트 생성 완료 — API 호출 시작', 3000);
+  if (btn) { btn.disabled = false; btn.textContent = '🤖 전체 프롬프트 생성'; }
+  render(); toast('✅ 전체 프롬프트 생성 완료 — 전체 실행 버튼을 눌러주세요', 3000);
+}
+
+// ───────────────────────────────────────────
+// 단일 축 실행
+// ───────────────────────────────────────────
+async function runSingleAxis(axId) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x => x.id === axId); if (!a) return;
+  const lastPrompt = (a.prompts || []).slice(-1)[0];
+  if (!lastPrompt) { toast('⚠️ 저장된 프롬프트가 없습니다. 먼저 생성 후 저장해주세요'); return; }
+  toast(`🚀 [${a.name}] ${a.assignedAI} 호출 중...`, 4000);
+  try {
+    const result = await callAI(
+      a.assignedAI,
+      '당신은 작가를 위한 리서치 전문가입니다. 요청된 항목을 정확히 조사하고 출력 형식을 반드시 준수해주세요.',
+      lastPrompt.content
+    );
+    if (result) {
+      if (!a.results) a.results = [];
+      a.results.push({ id: genId(), ai: a.assignedAI, promptVersion: lastPrompt.version,
+        content: result, score: 0, hasSource: false, formatOk: true, usable: false, memo: '', savedAt: Date.now() });
+      if (a.status === 'wait') a.status = 'doing';
+      save(); render(); toast(`✅ [${a.name}] 조사 완료`);
+    }
+  } catch(e) {
+    toast(`❌ [${a.name}] 오류: ` + e.message, 5000);
+  }
+}
+
+// ───────────────────────────────────────────
+// 전체 실행 (모든 축 병렬 API 호출)
+// ───────────────────────────────────────────
+async function runAllAxes() {
+  const p = currentProject(); if (!p) return;
+  const axes = (p.axes || []).filter(a => (a.prompts || []).length > 0);
+  if (!axes.length) { toast('⚠️ 저장된 프롬프트가 있는 축이 없습니다'); return; }
+  const btn = document.getElementById('run-all-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 전체 조사 중...'; }
+  toast(`🚀 ${axes.length}개 축 병렬 실행 시작`, 3000);
+  const promises = axes.map(async a => {
+    const prompt = a.prompts[a.prompts.length - 1]?.content || '';
+    try {
+      const result = await callAI(a.assignedAI,
+        '당신은 작가를 위한 리서치 전문가입니다. 요청된 항목을 정확히 조사하고 출력 형식을 반드시 준수해주세요.',
+        prompt
+      );
+      if (result) {
+        if (!a.results) a.results = [];
+        a.results.push({ id: genId(), ai: a.assignedAI, promptVersion: a.prompts[a.prompts.length-1].version,
+          content: result, score: 0, hasSource: false, formatOk: true, usable: false, memo: '', savedAt: Date.now() });
+        if (a.status === 'wait') a.status = 'doing';
+      }
+    } catch(e) {
+      toast(`❌ [${a.name}] ${a.assignedAI} 오류: ` + e.message, 5000);
+    }
+  });
+  await Promise.all(promises);
+  save(); render(); toast('✅ 전체 조사 완료 — 결과 탭에서 확인해주세요');
+  switchTab('results');
+  if (btn) { btn.disabled = false; btn.textContent = '🚀 전체 실행'; }
+}
+
+// ───────────────────────────────────────────
+// 노션 저장
+// ───────────────────────────────────────────
+function cleanDbId(id) { return String(id||'').trim().replace(/-/g,''); }
+function shortDbId(id) { const v = cleanDbId(id); return v ? `${v.slice(0,6)}…${v.slice(-6)}` : '미입력'; }
+
+async function notionRequest(url, options, label) {
+  const res = await fetch(url, options);
+  let data = null;
+  try { data = await res.json(); } catch(e) {}
+  if (!res.ok) {
+    const msg = data?.message || data?.error || res.statusText || '알 수 없는 오류';
+    throw new Error(`${label||'요청'} 실패 (${res.status}): ${msg}`);
+  }
+  return data;
+}
+function notionRichTextChunks(text) {
+  const str = String(text||'');
+  if (!str) return [];
+  const chunks = [];
+  for (let i = 0; i < str.length; i += 1900) chunks.push({ text: { content: str.slice(i, i+1900) } });
+  return chunks.slice(0,100);
+}
+
+async function notionSaveResult(result, axis, proj, idx) {
+  const proxy = state.settings.notionProxy;
+  const dbId = cleanDbId(state.settings.notionResultsDB);
+  if (!proxy || !dbId) { toast('⚙️ 설정에서 결과 DB ID를 입력해주세요'); return false; }
+  const resultId = result.id || `${axis.id}-${result.savedAt||idx}`;
+  result.id = resultId;
+  const today = new Date().toISOString().slice(0,10);
+  const props = {
+    '제목': { title: [{ text: { content: `[${proj.title}] ${axis.name} 결과 ${idx+1}` } }] },
+    '프로젝트ID': { rich_text: [{ text: { content: proj.id||'' } }] },
+    '축ID': { rich_text: [{ text: { content: axis.id||'' } }] },
+    '결과ID': { rich_text: [{ text: { content: resultId } }] },
+    '프로젝트명': { rich_text: [{ text: { content: proj.title||'' } }] },
+    '축이름': { rich_text: [{ text: { content: axis.name||'' } }] },
+    'AI': { select: { name: result.ai||'GPT' } },
+    '별점': { number: result.score||0 },
+    '메모': { rich_text: [{ text: { content: (result.memo||'').slice(0,1900) } }] },
+    '저장일': { date: { start: today } },
+    // TODO: Notion DB에 '사용자ID' (Text) 속성 추가 후 아래 주석 해제
+    // '사용자ID': { rich_text: [{ text: { content: getCurrentUserId() } }] }
+  };
+  // 결과 본문을 children 블록으로 분할 저장
+  const content = result.content||'';
+  const chunks = [];
+  for(let i=0;i<content.length;i+=1900) chunks.push(content.slice(i,i+1900));
+  const children = chunks.map(c=>({object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:c}}]}}));
+
+  const searchData = await notionRequest(`${proxy}/databases/${dbId}/query`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filter: { property: '결과ID', rich_text: { equals: resultId } } })
+  }, '결과 DB 검색');
+  const existing = searchData?.results?.[0];
+  if (existing) {
+    await notionRequest(`${proxy}/pages/${existing.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ properties: props })
+    }, '결과 업데이트');
+  } else {
+    const created = await notionRequest(`${proxy}/pages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent: { database_id: dbId }, properties: props, children: children.slice(0,100) })
+    }, '결과 생성');
+    // 100블록 초과 시 추가 append
+    if(created?.id && children.length > 100) {
+      for(let i=100;i<children.length;i+=100) {
+        await notionRequest(`${proxy}/blocks/${created.id}/children`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ children: children.slice(i,i+100) })
+        }, '결과 블록 추가');
+      }
+    }
+  }
+  return true;
+}
+
+async function notionSaveAxis(axis, proj) {
+  const proxy = state.settings.notionProxy;
+  const dbId = cleanDbId(state.settings.notionAxesDB);
+  if (!proxy || !dbId) { toast('⚙️ 설정에서 조사축 DB ID를 입력해주세요'); return; }
+  try {
+    const searchData = await notionRequest(`${proxy}/databases/${dbId}/query`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filter: { and: [
+        { property: '축ID', rich_text: { equals: axis.id } },
+        { property: '프로젝트ID', rich_text: { equals: proj.id } }
+      ]}})
+    }, '조사축 DB 검색');
+    const existing = searchData.results?.[0];
+    const props = {
+      '제목': { title: [{ text: { content: `[${proj.title}] ${axis.name}` } }] },
+      '프로젝트ID': { rich_text: [{ text: { content: proj.id } }] },
+      '축ID': { rich_text: [{ text: { content: axis.id } }] },
+      '프로젝트명': { rich_text: [{ text: { content: proj.title } }] },
+      '축이름': { rich_text: [{ text: { content: axis.name } }] },
+      '목적': { rich_text: [{ text: { content: axis.purpose||'' } }] },
+      '산출물': { rich_text: [{ text: { content: axis.output||'' } }] },
+      '배정AI': { select: { name: axis.assignedAI||'GPT' } },
+      '상태': { select: { name: STATUS_LABELS[axis.status]||'대기' } },
+      '결과수': { number: (axis.results||[]).length },
+      '최종평가': { number: axis.results?.length ? axis.results[axis.results.length-1].score||0 : 0 },
+      // TODO: Notion DB에 '사용자ID' (Text) 속성 추가 후 아래 주석 해제
+      // '사용자ID': { rich_text: [{ text: { content: getCurrentUserId() } }] }
+    };
+    if (existing) {
+      await notionRequest(`${proxy}/pages/${existing.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: props })
+      }, '조사축 업데이트');
+    } else {
+      await notionRequest(`${proxy}/pages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parent: { database_id: dbId }, properties: props })
+      }, '조사축 생성');
+    }
+    let savedResults = 0;
+    if (state.settings.notionResultsDB) {
+      for (let i = 0; i < (axis.results||[]).length; i++) {
+        if (await notionSaveResult(axis.results[i], axis, proj, i)) savedResults++;
+      }
+      save();
+    }
+    toast(`✅ [${axis.name}] 저장 완료${savedResults ? ` · 결과 ${savedResults}건` : ''}`);
+  } catch(e) { toast('❌ 노션 저장 실패: ' + e.message, 5000); }
+}
+
+async function notionSaveAxisById(axId) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x => x.id === axId); if (!a) return;
+  notionSaveAxis(a, p);
+}
+
+async function notionSaveProject(proj) {
+  const proxy = state.settings.notionProxy;
+  const dbId = cleanDbId(state.settings.notionProjectDB);
+  if (!proxy || !dbId) { toast('⚙️ 설정에서 프로젝트 DB ID를 입력해주세요'); return; }
+  try {
+    const searchData = await notionRequest(`${proxy}/databases/${dbId}/query`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filter: { property: '프로젝트ID', rich_text: { equals: proj.id } } })
+    }, '프로젝트 DB 검색');
+    const existing = searchData.results?.[0];
+    const progress = calcProgress(proj);
+    const props = {
+      '제목': { title: [{ text: { content: proj.title } }] },
+      '프로젝트ID': { rich_text: [{ text: { content: proj.id } }] },
+      '장르': { rich_text: [{ text: { content: proj.genre||'' } }] },
+      '조사목적': { rich_text: [{ text: { content: proj.purpose||'' } }] },
+      '진행률': { number: progress },
+      '축수': { number: (proj.axes||[]).length },
+      '완료축수': { number: (proj.axes||[]).filter(a => a.status==='done').length }
+    };
+    if (proj.brief) props['기획안요약'] = { rich_text: [{ text: { content: proj.brief.replace(/#+\s*/g,'').replace(/\*+/g,'').replace(/_{2,}/g,'').replace(/`/g,'').trim().slice(0,300) } }] };
+    if (existing) {
+      await notionRequest(`${proxy}/pages/${existing.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: props })
+      }, '프로젝트 업데이트');
+    } else {
+      await notionRequest(`${proxy}/pages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parent: { database_id: dbId }, properties: props })
+      }, '프로젝트 생성');
+    }
+    let axisCount = 0;
+    for (const axis of (proj.axes||[])) { await notionSaveAxis(axis, proj); axisCount++; }
+    toast(`✅ [${proj.title}] 전체 저장 완료 · 축 ${axisCount}개`);
+  } catch(e) { toast('❌ 노션 저장 실패: ' + e.message, 5000); }
+}
+
+// ───────────────────────────────────────────
+// 렌더
+// ───────────────────────────────────────────
+function render() {
+  const c = document.getElementById('content');
+  if (currentTab === 'projects') c.innerHTML = renderProjects();
+  else if (currentTab === 'plan') c.innerHTML = renderPlan();
+  else if (currentTab === 'axes') c.innerHTML = renderAxes();
+  else if (currentTab === 'prompts') c.innerHTML = renderPrompts();
+  else if (currentTab === 'results') c.innerHTML = renderResults();
+  else if (currentTab === 'output') c.innerHTML = renderOutput();
+}
+
+// ───────────────────────────────────────────
+// 탭1: 프로젝트
+// ───────────────────────────────────────────
+function renderProjects() {
+  const list = state.projects.map(p => {
+    const prog = calcProgress(p);
+    const isCurrent = p.id === state.currentProjectId;
+    return `<div class="card" style="border-color:${isCurrent?'var(--accent)':'var(--border)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="card-title">${p.title||'(제목 없음)'}</div>
+          <div class="card-meta">${p.genre||''} ${p.axes?.length ? `· 조사축 ${p.axes.length}개` : ''}</div>
+        </div>
+        <span class="badge ${isCurrent?'badge-blue':'badge-gray'}">${isCurrent?'현재':'선택'}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${prog}%"></div></div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">진행률 ${prog}%</div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm" onclick="selectProject('${p.id}')">📂 열기</button>
+        <button class="btn btn-secondary btn-sm" onclick="editProject('${p.id}')">✏️ 편집</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProject('${p.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="page-header">
+      <div><div class="page-title">📁 프로젝트</div><div class="page-sub">리서치 프로젝트 관리</div></div>
+    </div>
+    ${state.projects.length === 0 ? `<div class="empty"><div class="empty-icon">📂</div><div class="empty-text">프로젝트가 없습니다</div></div>` : list}
+    <button class="btn btn-primary btn-full" onclick="createProject()" style="margin-bottom:10px">➕ 새 프로젝트</button>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="exportJSON()" style="flex:1">💾 내보내기</button>
+      <button class="btn btn-secondary" onclick="importJSON()" style="flex:1">📥 가져오기</button>
+    </div>`;
+}
+
+function selectProject(id) {
+  state.currentProjectId = id; state.currentAxisId = null; save();
+  history.replaceState({ tab: currentTab, pid: id }, '', `#${currentTab}/${id}`);
+  toast('✅ 프로젝트 선택됨'); switchTab('plan');
+}
+function createProject() {
+  openModal(`
+    <div class="modal-title">새 프로젝트 <button class="modal-close" onclick="closeModalDirect()">✕</button></div>
+    <div class="field"><label>작품명 *</label><input id="m-title" placeholder="예: 열흘"></div>
+    <div class="field"><label>장르</label><input id="m-genre" placeholder="예: 성인 드라마 웹툰"></div>
+    <div class="field"><label>조사 목적</label><textarea id="m-purpose" placeholder="이 리서치로 무엇을 만들 건지" style="min-height:70px"></textarea></div>
+    <button class="btn btn-primary btn-full" onclick="confirmCreateProject()">생성</button>`);
+}
+function confirmCreateProject() {
+  const title = document.getElementById('m-title').value.trim();
+  if (!title) { toast('⚠️ 작품명을 입력해주세요'); return; }
+  const p = { id: genId(), title, genre: document.getElementById('m-genre').value.trim(),
+    purpose: document.getElementById('m-purpose').value.trim(), brief: '', axes: [], createdAt: Date.now() };
+  state.projects.push(p); state.currentProjectId = p.id;
+  save(); closeModalDirect(); switchTab('plan'); toast('✅ 프로젝트 생성 완료');
+}
+function editProject(id) {
+  const p = state.projects.find(x => x.id === id); if (!p) return;
+  openModal(`
+    <div class="modal-title">프로젝트 편집 <button class="modal-close" onclick="closeModalDirect()">✕</button></div>
+    <div class="field"><label>작품명</label><input id="m-title" value="${esc(p.title)}"></div>
+    <div class="field"><label>장르</label><input id="m-genre" value="${esc(p.genre||'')}"></div>
+    <div class="field"><label>조사 목적</label><textarea id="m-purpose" style="min-height:70px">${esc(p.purpose||'')}</textarea></div>
+    <button class="btn btn-primary btn-full" onclick="confirmEditProject('${id}')">저장</button>`);
+}
+function confirmEditProject(id) {
+  const p = state.projects.find(x => x.id === id); if (!p) return;
+  p.title = document.getElementById('m-title').value.trim() || p.title;
+  p.genre = document.getElementById('m-genre').value.trim();
+  p.purpose = document.getElementById('m-purpose').value.trim();
+  save(); closeModalDirect(); render(); toast('✅ 저장됨');
+}
+function deleteProject(id) {
+  if (!confirm('이 프로젝트를 삭제하시겠습니까?')) return;
+  state.projects = state.projects.filter(p => p.id !== id);
+  if (state.currentProjectId === id) state.currentProjectId = null;
+  save(); render(); toast('🗑️ 삭제됨');
+}
+
+// ───────────────────────────────────────────
+// 탭2: 기획안
+// ───────────────────────────────────────────
+function renderPlan() {
+  const p = currentProject();
+  if (!p) return noProject();
+  return `
+    <div class="page-header">
+      <div><div class="page-title">📝 기획안</div><div class="page-sub">${p.title}</div></div>
+    </div>
+    <div class="field"><label>기획안 전문</label>
+      <textarea id="brief-input" style="min-height:200px" placeholder="기획안 전문을 입력하세요...">${esc(p.brief||'')}</textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" style="flex:1" onclick="saveBrief()">💾 저장</button>
+    </div>
+    <div class="btn-row" style="align-items:center">
+      <select id="axes-ai-select" style="flex:0 0 auto;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:14px;font-weight:600;outline:none;-webkit-appearance:none">
+        <option value="GPT">GPT</option>
+        <option value="Gemini">Gemini</option>
+        <option value="Claude">Claude</option>
+      </select>
+      <button id="auto-axes-btn" class="btn btn-secondary" style="flex:1" onclick="autoDesignAxes()">🤖 조사축 자동 설계</button>
+    </div>
+    ${p.brief ? `
+    <div class="divider"></div>
+    <div class="read-card">
+      <div class="read-label">기획안 미리보기</div>
+      <div class="read-content" style="max-height:200px;overflow-y:auto">${esc(p.brief)}</div>
+      <div class="btn-row"><button class="btn btn-secondary btn-sm" onclick="openBriefReader()">📖 전체 읽기</button></div>
+    </div>` : ''}`;
+}
+function saveBrief() {
+  const p = currentProject(); if (!p) return;
+  p.brief = document.getElementById('brief-input').value;
+  save(); render(); toast('💾 기획안 저장됨');
+}
+
+// ───────────────────────────────────────────
+// 탭3: 조사축
+// ───────────────────────────────────────────
+function renderAxes() {
+  const p = currentProject();
+  if (!p) return noProject();
+  const axes = p.axes || [];
+  const cards = axes.map(a => {
+    const aiClass = (a.assignedAI||'GPT').toLowerCase();
+    return `<div class="axis-card">
+      <div class="axis-header">
+        <div class="axis-name">${a.name}</div>
+        <span class="badge ${STATUS_COLORS[a.status]}">${STATUS_LABELS[a.status]}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:6px">${a.purpose||''}</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">산출물: ${a.output||'-'}</div>
+      <div style="margin-bottom:8px">
+        <span class="ai-tag ${aiClass}">${a.assignedAI||'GPT'}</span>
+        ${a.model ? `<span class="badge badge-gray">${a.model}</span>` : ''}
+        ${(a.tags||[]).map(t=>`<span class="badge badge-gray" style="margin:2px">${t}</span>`).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--text3)">프롬프트 ${(a.prompts||[]).length}개 · 결과 ${(a.results||[]).length}건</div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="editAxis('${a.id}')">✏️ 편집</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleAxisStatus('${a.id}')">🔄 상태</button>
+        <button class="notion-btn btn-sm" style="flex:0;width:auto;padding:6px 10px;font-size:12px" onclick="notionSaveAxisById('${a.id}')">📤 노션</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteAxis('${a.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="page-header">
+      <div><div class="page-title">🔍 조사축</div><div class="page-sub">${p.title} · ${axes.length}개</div></div>
+    </div>
+    ${axes.length === 0 ? `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">기획안 탭에서 GPT로 자동 설계하거나 직접 추가해주세요</div></div>` : cards}
+    <button class="btn btn-primary btn-full" onclick="addAxis()">➕ 축 추가</button>`;
+}
+
+let _selectedAI = 'GPT';
+function addAxis() {
+  _selectedAI = 'GPT';
+  openModal(`
+    <div class="modal-title">축 추가 <button class="modal-close" onclick="closeModalDirect()">✕</button></div>
+    <div class="field"><label>축 이름 *</label><input id="ax-name" placeholder="예: 법률, 직업, 의뢰인"></div>
+    <div class="field"><label>목적</label><input id="ax-purpose" placeholder="예: 플롯 제약조건 확인"></div>
+    <div class="field"><label>산출물</label><input id="ax-output" placeholder="예: 판례 요약 + 플롯 영향 메모"></div>
+    <div class="field"><label>태그 (쉼표 구분)</label><input id="ax-tags" placeholder="법률, 판례"></div>
+    <div class="field"><label>배정 AI</label>
+      <div style="margin-top:6px;display:flex;gap:8px" id="ai-selector">
+        <button type="button" class="ai-tag gpt selected" onclick="selectAI('GPT')">GPT</button>
+        <button type="button" class="ai-tag gemini" onclick="selectAI('Gemini')">Gemini</button>
+        <button type="button" class="ai-tag claude" onclick="selectAI('Claude')">Claude</button>
+      </div>
+    </div>
+    <div class="field"><label>모델 (선택)</label><input id="ax-model" placeholder="예: gpt-4o, gemini-2.0-flash"></div>
+    <button type="button" class="btn btn-primary btn-full" onclick="confirmAddAxis()">추가</button>`);
+}
+function selectAI(ai) {
+  _selectedAI = ai;
+  document.querySelectorAll('#ai-selector .ai-tag').forEach(el => el.classList.toggle('selected', el.textContent===ai));
+}
+function confirmAddAxis() {
+  const p = currentProject(); if (!p) return;
+  const name = document.getElementById('ax-name').value.trim();
+  if (!name) { toast('⚠️ 축 이름을 입력해주세요'); return; }
+  const axis = { id: genId(), name, purpose: document.getElementById('ax-purpose').value.trim(),
+    output: document.getElementById('ax-output').value.trim(),
+    tags: document.getElementById('ax-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+    assignedAI: _selectedAI, model: document.getElementById('ax-model').value.trim(),
+    status: 'wait', prompts: [], results: [], createdAt: Date.now() };
+  if (!p.axes) p.axes = [];
+  p.axes.push(axis);
+  save(); closeModalDirect(); render(); toast('✅ 축 추가됨');
+}
+function editAxis(axId) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x=>x.id===axId); if (!a) return;
+  _selectedAI = a.assignedAI || 'GPT';
+  openModal(`
+    <div class="modal-title">축 편집 <button class="modal-close" onclick="closeModalDirect()">✕</button></div>
+    <div class="field"><label>축 이름</label><input id="ax-name" value="${esc(a.name)}"></div>
+    <div class="field"><label>목적</label><input id="ax-purpose" value="${esc(a.purpose||'')}"></div>
+    <div class="field"><label>산출물</label><input id="ax-output" value="${esc(a.output||'')}"></div>
+    <div class="field"><label>태그 (쉼표 구분)</label><input id="ax-tags" value="${esc((a.tags||[]).join(', '))}"></div>
+    <div class="field"><label>배정 AI</label>
+      <div style="margin-top:6px;display:flex;gap:8px" id="ai-selector">
+        <button type="button" class="ai-tag gpt ${_selectedAI==='GPT'?'selected':''}" onclick="selectAI('GPT')">GPT</button>
+        <button type="button" class="ai-tag gemini ${_selectedAI==='Gemini'?'selected':''}" onclick="selectAI('Gemini')">Gemini</button>
+        <button type="button" class="ai-tag claude ${_selectedAI==='Claude'?'selected':''}" onclick="selectAI('Claude')">Claude</button>
+      </div>
+    </div>
+    <div class="field"><label>모델</label>
+      <input id="ax-model" value="${esc(a.model||'')}" placeholder="비워두면 설정의 기본 모델 사용">
+    </div>
+    <button type="button" class="btn btn-primary btn-full" onclick="confirmEditAxis('${axId}')">저장</button>`);
+}
+function confirmEditAxis(axId) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x=>x.id===axId); if (!a) return;
+  a.name = document.getElementById('ax-name').value.trim() || a.name;
+  a.purpose = document.getElementById('ax-purpose').value.trim();
+  a.output = document.getElementById('ax-output').value.trim();
+  a.tags = document.getElementById('ax-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  a.assignedAI = _selectedAI || a.assignedAI;
+  a.model = document.getElementById('ax-model').value.trim();
+  save(); closeModalDirect(); render(); toast('✅ 저장됨');
+}
+function toggleAxisStatus(axId) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x=>x.id===axId); if (!a) return;
+  const cycle = { wait:'doing', doing:'done', done:'wait' };
+  a.status = cycle[a.status]||'wait';
+  save(); render(); toast(`🔄 상태: ${STATUS_LABELS[a.status]}`);
+}
+function deleteAxis(axId) {
+  if (!confirm('이 축을 삭제하시겠습니까?')) return;
+  const p = currentProject(); if (!p) return;
+  p.axes = p.axes.filter(x=>x.id!==axId);
+  save(); render(); toast('🗑️ 삭제됨');
+}
+
+// ───────────────────────────────────────────
+// 탭4: 프롬프트
+// ───────────────────────────────────────────
+function renderPrompts() {
+  const p = currentProject();
+  if (!p) return noProject();
+  const axes = p.axes || [];
+  if (!axes.length) return `<div class="empty"><div class="empty-icon">✨</div><div class="empty-text">먼저 조사축을 추가해주세요</div></div>`;
+  const axCards = axes.map(a => {
+    const lastPrompt = (a.prompts||[]).slice(-1)[0];
+    return `<div class="axis-card" id="pcard-${a.id}">
+      <div class="axis-header">
+        <div class="axis-name">${a.name}</div>
+        <span class="ai-tag ${(a.assignedAI||'GPT').toLowerCase()}">${a.assignedAI||'GPT'}</span>
+      </div>
+      <textarea id="prompt-text-${a.id}" class="prompt-editor" placeholder="프롬프트를 자동 생성하거나 직접 입력하세요...">${esc(lastPrompt?.content||'')}</textarea>
+      <div class="btn-row">
+        <button id="gen-btn-${a.id}" class="btn btn-secondary btn-sm" style="flex:1" onclick="autoGeneratePrompt('${a.id}')">🤖 자동 생성</button>
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="savePromptFromEditor('${a.id}')">💾 저장</button>
+        <button class="btn btn-success btn-sm" onclick="runSingleAxis('${a.id}')">▶ 실행</button>
+        <button class="btn btn-secondary btn-sm" onclick="copyText(document.getElementById('prompt-text-${a.id}').value)">📋</button>
+        ${lastPrompt ? `<button class="btn btn-secondary btn-sm" onclick="openPromptReader('${a.id}')">📖</button>` : ''}
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">저장된 버전 ${(a.prompts||[]).length}개</div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="page-header">
+      <div><div class="page-title">✨ 프롬프트</div><div class="page-sub">${p.title}</div></div>
+    </div>
+    <div class="btn-row" style="margin-bottom:16px">
+      <button id="gen-all-btn" class="btn btn-secondary btn-full" style="flex:1" onclick="genAllPrompts()">🤖 전체 프롬프트 생성</button>
+      <button id="run-all-btn" class="btn btn-success" style="flex:1" onclick="runAllAxes()">🚀 전체 실행</button>
+    </div>
+    ${axCards}`;
+}
+
+
+function openPromptReader(axId) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x => x.id === axId); if (!a) return;
+  const lastPrompt = (a.prompts || []).slice(-1)[0]; if (!lastPrompt) return;
+  const idx = a.prompts.length - 1;
+  openReader(`프롬프트 ${lastPrompt.version}`, a.name, lastPrompt.content, { type: 'prompt', axId, idx });
+}
+
+function openResultReader(axId, idx) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x => x.id === axId); if (!a) return;
+  const r = (a.results || [])[idx]; if (!r) return;
+  openReader(`${a.name} 결과 ${idx+1}`, `${r.ai} ${r.promptVersion}`, r.content || '', { type: 'result', axId, idx });
+}
+function deletePrompt(axId, idx) {
+  if (!confirm('이 프롬프트를 삭제하시겠습니까?')) return;
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x=>x.id===axId); if (!a) return;
+  a.prompts.splice(idx, 1);
+  save(); render(); toast('🗑️ 삭제됨');
+}
+function renderPromptDetail(axId) { /* 단순화로 불필요 */ }
+
+// ───────────────────────────────────────────
+// 탭5: 결과
+// ───────────────────────────────────────────
+function renderResults() {
+  const p = currentProject();
+  if (!p) return noProject();
+  const axes = p.axes || [];
+  if (!axes.length) return `<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">먼저 조사축을 추가해주세요</div></div>`;
+  const cards = axes.map(a => {
+    const results = a.results || [];
+    const resultItems = results.map((r, i) => `
+      <div class="result-card">
+        <div class="result-card-header">
+          <div class="result-status">
+            <span class="ai-tag ${(r.ai||'').toLowerCase()}">${r.ai||'AI'}</span>
+            <span class="badge badge-gray">${r.promptVersion||'v?'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text3)">${new Date(r.savedAt).toLocaleDateString()}</div>
+        </div>
+        <div class="star-rating">
+          ${[1,2,3,4,5].map(n=>`<span class="star ${(r.score||0)>=n?'on':''}" onclick="setScore('${a.id}',${i},${n})">★</span>`).join('')}
+        </div>
+        <div class="result-preview">${esc(stripMd(r.content||'').slice(0,200))}</div>
+        <div class="btn-row">
+          <button class="btn btn-secondary btn-sm" onclick="openResultReader('${a.id}',${i})">📖 읽기</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyText(${JSON.stringify(r.content||'')})">📋 복사</button>
+          <button class="btn btn-warn btn-sm" onclick="editResultMemo('${a.id}',${i})">📝 메모</button>
+          <button class="notion-btn btn-sm" style="flex:0;width:auto;padding:6px 10px;font-size:12px" onclick="notionSaveAxisById('${a.id}')">📤 노션</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteResult('${a.id}',${i})">🗑️</button>
+        </div>
+        ${r.memo ? `<div style="font-size:12px;color:var(--text2);margin-top:8px;padding:8px;background:var(--bg3);border-radius:8px">📝 ${esc(r.memo)}</div>` : ''}
+      </div>`).join('');
+    return `<div class="axis-card">
+      <div class="axis-header">
+        <div class="axis-name">${a.name}</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="ai-tag ${(a.assignedAI||'GPT').toLowerCase()}">${a.assignedAI||'GPT'}</span>
+          <span class="badge ${STATUS_COLORS[a.status]}">${STATUS_LABELS[a.status]}</span>
+        </div>
+      </div>
+      ${results.length ? resultItems : `<div style="font-size:13px;color:var(--text3);padding:12px 0">결과 없음 — 프롬프트 탭에서 실행해주세요</div>`}
+    </div>`;
+  }).join('');
+  return `
+    <div class="page-header">
+      <div><div class="page-title">📊 결과</div><div class="page-sub">${p.title}</div></div>
+    </div>
+    ${cards}`;
+}
+
+function setScore(axId, idx, score) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x => x.id === axId); if (!a) return;
+  const r = a.results?.[idx]; if (!r) return;
+  r.score = r.score === score ? 0 : score;
+  save(); render(); toast(`⭐ 별점 ${r.score}점 저장됨`);
+}
+
+function editResultMemo(axId, idx) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x=>x.id===axId); if (!a) return;
+  const r = (a.results||[])[idx]; if (!r) return;
+  openModal(`
+    <div class="modal-title">메모 편집 <button class="modal-close" onclick="closeModalDirect()">✕</button></div>
+    <div class="field"><label>메모</label><textarea id="edit-memo" style="min-height:100px">${esc(r.memo||'')}</textarea></div>
+    <button class="btn btn-primary btn-full" onclick="saveResultMemo('${axId}',${idx})">저장</button>`);
+}
+function saveResultMemo(axId, idx) {
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x=>x.id===axId); if (!a) return;
+  const r = (a.results||[])[idx]; if (!r) return;
+  r.memo = document.getElementById('edit-memo').value.trim();
+  save(); closeModalDirect(); render(); toast('✅ 메모 저장됨');
+}
+function deleteResult(axId, idx) {
+  if (!confirm('이 결과를 삭제하시겠습니까?')) return;
+  const p = currentProject(); if (!p) return;
+  const a = p.axes.find(x=>x.id===axId); if (!a) return;
+  a.results.splice(idx, 1);
+  save(); render(); toast('🗑️ 삭제됨');
+}
+
+// ───────────────────────────────────────────
+// 탭6: 출력
+// ───────────────────────────────────────────
+function renderOutput() {
+  const p = currentProject();
+  if (!p) return noProject();
+  return `
+    <div class="page-header">
+      <div><div class="page-title">📤 출력</div><div class="page-sub">${p.title}</div></div>
+    </div>
+    <div class="btn-row" style="margin-bottom:14px">
+      <button class="btn btn-secondary" style="flex:1" onclick="showOutputMode('text')">📄 텍스트</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="showOutputMode('md')">⬇️ 마크다운</button>
+    </div>
+    <div id="output-preview"></div>
+    <div class="divider"></div>
+    <div class="section-title">작가실 연동</div>
+    <div class="card">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">리서치 결과를 집필실 참고자료 B에 자동 추가합니다.<br>전송 후 집필실을 열면 참고자료 B에 문서가 추가됩니다.</div>
+      <button class="btn btn-primary" style="width:100%;font-size:13px;" onclick="sendToWriterRoom()">→ 집필실로 보내기</button>
+      <div id="wr-send-status" style="font-size:11px;color:var(--text3);margin-top:6px;min-height:16px;"></div>
+    </div>
+    <div class="divider"></div>
+    <div class="section-title">노션 저장</div>
+    <div class="card">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">축별 저장 또는 프로젝트 전체 저장</div>
+      ${(p.axes||[]).map(a=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div><div style="font-size:14px;font-weight:600">${a.name}</div>
+            <div style="font-size:12px;color:var(--text3)">${STATUS_LABELS[a.status]} · 결과 ${(a.results||[]).length}건</div></div>
+          <button class="notion-btn" style="width:auto;padding:8px 12px;font-size:13px" onclick="notionSaveAxisById('${a.id}')">📤 저장</button>
+        </div>`).join('')}
+      <div style="margin-top:12px">
+        <button class="notion-btn" onclick="notionSaveProject(currentProject())">🚀 프로젝트 전체 노션 저장</button>
+      </div>
+    </div>`;
+}
+
+function generateTextOutput() {
+  const p = currentProject(); if (!p) return '';
+  let out = `=== ${p.title} 리서치 기록 ===\n장르: ${p.genre||'-'} | 조사 목적: ${p.purpose||'-'}\n\n`;
+  if (p.brief) out += `[기획안 요약]\n${p.brief.slice(0,300)}...\n\n`;
+  (p.axes||[]).forEach(a => {
+    out += `--- [${a.name}] (${a.assignedAI}) | ${STATUS_LABELS[a.status]} ---\n`;
+    out += `목적: ${a.purpose||'-'}\n산출물: ${a.output||'-'}\n`;
+    (a.results||[]).forEach((r,i) => {
+      out += `\n[결과 ${i+1}] ${r.ai} ${r.promptVersion}\n${r.content}\n`;
+      if (r.memo) out += `메모: ${r.memo}\n`;
+    });
+    out += '\n';
+  });
+  return out;
+}
+function generateMdOutput() {
+  const p = currentProject(); if (!p) return '';
+  let out = `# ${p.title} 리서치 기록\n\n> 장르: ${p.genre||'-'} | 조사 목적: ${p.purpose||'-'}\n\n`;
+  out += `## 조사축 설계\n\n| 축 | AI | 상태 | 결과수 |\n|---|---|---|---|\n`;
+  (p.axes||[]).forEach(a => out += `| ${a.name} | ${a.assignedAI} | ${STATUS_LABELS[a.status]} | ${(a.results||[]).length}건 |\n`);
+  out += '\n';
+  (p.axes||[]).forEach(a => {
+    out += `## ${a.name} (${a.assignedAI})\n\n**목적**: ${a.purpose||'-'}  \n**산출물**: ${a.output||'-'}\n\n`;
+    (a.results||[]).forEach((r,i) => {
+      out += `### 결과 ${i+1} — ${r.ai} ${r.promptVersion}\n\n${r.content}\n\n`;
+      if (r.memo) out += `> 메모: ${r.memo}\n\n`;
+    });
+  });
+  return out;
+}
+let _outputMode = 'md', _currentOutputText = '';
+function showOutputMode(mode) {
+  _outputMode = mode;
+  const text = mode === 'text' ? generateTextOutput() : generateMdOutput();
+  const preview = document.getElementById('output-preview');
+  if (!preview) return;
+  preview.innerHTML = `
+    <div class="output-area" id="output-text-area">${esc(text)}</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" style="flex:1" onclick="copyText(_currentOutputText)">📋 전체 복사</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="downloadOutput('${mode}')">💾 다운로드</button>
+    </div>`;
+  _currentOutputText = text;
+}
+
+function sendToWriterRoom() {
+  const p = currentProject();
+  if (!p) { toast('프로젝트를 선택하세요.'); return; }
+  const text = _outputMode === 'text' ? generateTextOutput() : generateMdOutput();
+  if (!text.trim()) { toast('출력할 내용이 없습니다.'); return; }
+  try {
+    const payload = {
+      projectTitle: p.title,
+      content: text,
+      exportedAt: new Date().toISOString(),
+      mode: _outputMode
+    };
+    localStorage.setItem('wr_inject', JSON.stringify(payload));
+    const el = document.getElementById('wr-send-status');
+    if (el) el.textContent = `✓ 전송 완료 (${new Date().toLocaleTimeString('ko-KR')}) — 작가실 STEP 1에서 불러오기 버튼을 누르세요.`;
+    toast('→ 작가실로 전송했습니다.');
+  } catch(e) {
+    toast('전송 실패: ' + e.message);
+  }
+}
+function downloadOutput(mode) {
+  const ext = mode === 'md' ? 'md' : 'txt';
+  const p = currentProject();
+  const blob = new Blob([_currentOutputText], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${p?.title||'리서치'}_${new Date().toISOString().slice(0,10)}.${ext}`;
+  a.click(); URL.revokeObjectURL(url);
+  toast(`💾 ${ext.toUpperCase()} 다운로드 완료`);
+}
+
+// ───────────────────────────────────────────
+// 설정
+// ───────────────────────────────────────────
+function openSettings() {
+  const s = state.settings;
+  const inp = (id,val,ph,type='text') => `<input id="${id}" type="${type}" value="${esc(val||'')}" placeholder="${ph||''}" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-size:14px;margin-top:4px">`;
+  const sel = (id,opts,cur) => `<select id="${id}" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-size:14px;margin-top:4px">${opts.map(([v,l])=>`<option value="${v}" ${cur===v?'selected':''}>${l}</option>`).join('')}</select>`;
+  openModal(`
+    <div class="modal-title">⚙️ 설정 <button class="modal-close" onclick="closeModalDirect()">✕</button></div>
+
+    <div class="section-title">GPT</div>
+    <div class="setting-item">
+      <div class="setting-label">API 키</div>
+      ${inp('s-gpt-key', s.gptApiKey, 'sk-...', 'password')}
+    </div>
+    <div class="setting-item">
+      <div class="setting-label">모델</div>
+      ${sel('s-gpt-model',[['gpt-4o','gpt-4o (권장)'],['gpt-4o-mini','gpt-4o-mini (저비용)'],['gpt-4-turbo','gpt-4-turbo'],['gpt-4','gpt-4']],s.gptModel||'gpt-4o')}
+    </div>
+
+    <div class="section-title">Gemini</div>
+    <div class="setting-item">
+      <div class="setting-label">API 키</div>
+      ${inp('s-gemini-key', s.geminiApiKey, 'AIza...', 'password')}
+    </div>
+    <div class="setting-item">
+      <div class="setting-label">모델</div>
+      ${sel('s-gemini-model',[['gemini-2.5-flash','gemini-2.5-flash (권장)'],['gemini-2.5-flash-lite','gemini-2.5-flash-lite (저비용)'],['gemini-2.5-pro','gemini-2.5-pro (고성능)'],['gemini-3.5-flash','gemini-3.5-flash (최신)']],s.geminiModel||'gemini-2.5-flash')}
+    </div>
+
+    <div class="section-title">Claude</div>
+    <div class="setting-item">
+      <div class="setting-label">API 키</div>
+      ${inp('s-claude-key', s.claudeApiKey, 'sk-ant-...', 'password')}
+    </div>
+    <div class="setting-item">
+      <div class="setting-label">모델</div>
+      ${sel('s-claude-model',[['claude-sonnet-4-6','claude-sonnet-4-6 (권장)'],['claude-opus-4-6','claude-opus-4-6'],['claude-haiku-4-5-20251001','claude-haiku-4-5 (빠름)']],s.claudeModel||'claude-sonnet-4-6')}
+    </div>
+
+    <div class="section-title">노션 연동</div>
+    <div class="setting-item">
+      <div class="setting-label">Cloudflare 프록시 URL</div>
+      ${inp('s-proxy', s.notionProxy, 'https://notion-proxy.xxx.workers.dev')}
+    </div>
+    <div class="setting-item">
+      <div class="setting-label">노션 토큰</div>
+      <div class="setting-desc">Workers에 저장된 경우 비워두셔도 됩니다</div>
+      ${inp('s-notion-token', s.notionToken, 'secret_...', 'password')}
+    </div>
+    <div class="setting-item">
+      <div class="setting-label">프로젝트 DB ID</div>
+      ${inp('s-proj-db', s.notionProjectDB, 'xxxxxxxx-xxxx-...')}
+    </div>
+    <div class="setting-item">
+      <div class="setting-label">조사축 DB ID</div>
+      ${inp('s-axes-db', s.notionAxesDB, 'xxxxxxxx-xxxx-...')}
+    </div>
+    <div class="setting-item">
+      <div class="setting-label">결과 DB ID</div>
+      ${inp('s-results-db', s.notionResultsDB, 'xxxxxxxx-xxxx-...')}
+    </div>
+
+    <div class="section-title">화면 설정</div>
+    <div class="setting-item">
+      <div class="setting-label">테마</div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="btn ${s.theme==='dark'?'btn-primary':'btn-secondary'}" onclick="setTheme('dark')">🌙 다크</button>
+        <button class="btn ${s.theme==='light'?'btn-primary':'btn-secondary'}" onclick="setTheme('light')">☀️ 라이트</button>
+      </div>
+    </div>
+    <div class="setting-item">
+      <div class="setting-label">글자 크기: <span id="fs-val">${s.fontSize}</span>px</div>
+      <input type="range" min="13" max="20" value="${s.fontSize}" oninput="setFontSize(this.value)" style="width:100%;margin-top:8px">
+    </div>
+    <div class="divider"></div>
+    <button class="btn btn-primary btn-full" onclick="saveSettings()">저장</button>`);
+}
+
+function setTheme(t) {
+  state.settings.theme = t; applySettings();
+  document.querySelectorAll('.setting-item .btn').forEach(b => {
+    if (b.textContent.includes('다크')) b.className = `btn ${t==='dark'?'btn-primary':'btn-secondary'}`;
+    if (b.textContent.includes('라이트')) b.className = `btn ${t==='light'?'btn-primary':'btn-secondary'}`;
+  });
+}
+function setFontSize(v) {
+  state.settings.fontSize = parseInt(v);
+  document.getElementById('fs-val').textContent = v;
+  applySettings();
+}
+function saveSettings() {
+  const g = id => document.getElementById(id)?.value.trim();
+  const s = state.settings;
+  if (g('s-gpt-key')) s.gptApiKey = g('s-gpt-key');
+  s.gptModel = g('s-gpt-model') || s.gptModel;
+  if (g('s-gemini-key')) s.geminiApiKey = g('s-gemini-key');
+  s.geminiModel = g('s-gemini-model') || s.geminiModel;
+  if (g('s-claude-key')) s.claudeApiKey = g('s-claude-key');
+  s.claudeModel = g('s-claude-model') || s.claudeModel;
+  s.notionProxy = g('s-proxy') || s.notionProxy;
+  if (g('s-notion-token')) s.notionToken = g('s-notion-token');
+  s.notionProjectDB = g('s-proj-db') || s.notionProjectDB;
+  s.notionAxesDB = g('s-axes-db') || s.notionAxesDB;
+  s.notionResultsDB = g('s-results-db') || '';
+  save(); closeModalDirect(); render(); toast('⚙️ 설정 저장됨');
+}
+function applySettings() {
+  const s = state.settings;
+  document.body.classList.toggle('theme-light', s.theme === 'light');
+  document.documentElement.style.setProperty('--font-size', (s.fontSize||15) + 'px');
+}
+
+// ───────────────────────────────────────────
+// 유틸
+// ───────────────────────────────────────────
+function noProject() {
+  return `<div class="empty">
+    <div class="empty-icon">📂</div>
+    <div class="empty-text">프로젝트를 먼저 선택해주세요</div>
+    <button class="btn btn-primary" onclick="switchTab('projects')">프로젝트로 이동</button>
+  </div>`;
+}
+function esc(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ───────────────────────────────────────────
+// 초기화
+// ──────────────────────────────────────
+load();
+applySettings();
+render();
+</script>
+
+<!-- ── 오류 로그 패널 ── -->
+<style>
+#_errbtn{position:fixed;bottom:16px;right:16px;z-index:9999;background:#1a1a1f;border:1px solid #444;color:#888;font-size:11px;padding:5px 12px;border-radius:20px;cursor:pointer;font-family:monospace;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#_errbtn.has-err{border-color:#c05050;color:#e07070;background:#1f1010}
+#_errpanel{display:none;position:fixed;bottom:50px;right:16px;z-index:9998;width:380px;max-height:280px;background:#0f0f15;border:1px solid #3a3a3a;border-radius:8px;overflow:hidden;flex-direction:column;font-family:monospace;font-size:11px;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+#_errpanel.open{display:flex}
+#_errhead{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#1a1a2a;border-bottom:1px solid #2a2a3a;flex-shrink:0}
+#_errhead span{flex:1;color:#8888aa;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+#_errhead button{background:none;border:1px solid #333;color:#666;font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer;font-family:monospace;transition:all .1s}
+#_errhead button:hover{color:#ccc;border-color:#666}
+#_errbody{overflow-y:auto;flex:1;padding:6px}
+.err-entry{padding:6px 8px;border-bottom:1px solid #1e1e28;line-height:1.4}
+.err-entry:last-child{border-bottom:none}
+.err-meta{color:#555;font-size:10px;margin-bottom:3px}
+.err-msg{word-break:break-all;color:#e09090}
+</style>
+<button id="_errbtn" onclick="window._errToggle()">⚠ 오류 0</button>
+<div id="_errpanel">
+  <div id="_errhead">
+    <span>오류 로그</span>
+    <button onclick="window._errCopy()">복사</button>
+    <button onclick="window._errClear()">지우기</button>
+    <button onclick="window._errToggle()">✕</button>
+  </div>
+  <div id="_errbody"><div style="color:#444;padding:8px 10px">오류 없음</div></div>
+</div>
+<script>
+(function(){
+  var errs=[],open=false;
+  function add(msg,src,line){
+    var t=new Date().toLocaleTimeString('ko-KR');
+    errs.push({t:t,msg:String(msg),src:src||'',line:line||''});
+    render();
+    if(!open)toggle();
+  }
+  function render(){
+    var btn=document.getElementById('_errbtn');
+    var body=document.getElementById('_errbody');
+    if(btn){btn.textContent='⚠ 오류 '+errs.length;btn.className=errs.length?'has-err':'';}
+    if(!body)return;
+    if(!errs.length){body.innerHTML='<div style="color:#444;padding:8px 10px">오류 없음</div>';return;}
+    body.innerHTML=errs.slice().reverse().map(function(e){
+      return '<div class="err-entry"><div class="err-meta">'+e.t+(e.src?' \xb7 '+e.src+(e.line?':'+e.line:''):'')+'</div><div class="err-msg">'+e.msg+'</div></div>';
+    }).join('');
+  }
+  function toggle(){open=!open;var p=document.getElementById('_errpanel');if(p)p.classList.toggle('open',open);}
+  window._errToggle=toggle;
+  window._errClear=function(){errs=[];render();};
+  window._errCopy=function(){
+    var txt=errs.map(function(e){return '['+e.t+'] '+(e.src||'')+(e.line?':'+e.line:'')+'\n'+e.msg;}).join('\n\n---\n');
+    if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){alert('복사됨');});}
+    else{var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);alert('복사됨');}
+  };
+  window.onerror=function(msg,src,line){add(msg,src?src.split('/').pop():'',line);return false;};
+  window.addEventListener('unhandledrejection',function(e){add(e.reason&&e.reason.message?e.reason.message:String(e.reason),'Promise','');});
+  var _ce=console.error;
+  console.error=function(){var a=Array.prototype.slice.call(arguments);add(a.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);}).join(' '),'console','');_ce.apply(console,arguments);};
+})();
+</script>
+</body>
+</html>
