@@ -588,6 +588,10 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
         <span class="settings-lbl">Notion 토큰</span>
         <input class="settings-input" id="notionKeyInput" type="password" placeholder="ntn_..." autocomplete="off">
       </div>
+      <div class="settings-row" style="padding-top:4px;">
+        <span class="settings-lbl" style="font-size:10px;color:var(--text3);">연결 확인</span>
+        <button onclick="testNotionConnection()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;">테스트 전송</button>
+      </div>
     </div>
 
     <div class="settings-section-title">보안</div>
@@ -1585,6 +1589,37 @@ window.addEventListener('pagehide', () => {
     });
   } catch(e) {}
 });
+
+async function testNotionConnection() {
+  const key = document.getElementById('notionKeyInput').value.trim() || config.notionKey;
+  if(!key) { showToast('토큰을 먼저 입력해주세요'); return; }
+  showToast('노션 연결 테스트 중...');
+  try {
+    const now = new Date();
+    const res = await fetch('https://notion-proxy.firewood2000.workers.dev/v1/pages', {
+      method:'POST',
+      headers:{ 'X-Notion-Key':key, 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        parent:{ database_id: NOTION_DS_ID },
+        properties:{
+          '제목': { title:[{ text:{ content:`[연결테스트] ${now.toLocaleTimeString('ko-KR')}` } }] },
+          '카테고리': { select:{ name:'세션' } },
+          '상태': { select:{ name:'성공' } },
+          '날짜': { date:{ start:now.toISOString(), end:null } },
+        }
+      })
+    });
+    const data = await res.json();
+    if(res.ok) {
+      showToast('✓ 노션 연결 성공! DB에 테스트 항목이 추가됐습니다');
+    } else {
+      showToast('✗ 실패: ' + (data.message||res.status));
+      console.warn('노션 테스트 실패:', data);
+    }
+  } catch(e) {
+    showToast('✗ 오류: ' + e.message);
+  }
+}
 
 async function manualNotionLog() {
   if(!config.notionKey) { showToast('설정에서 Notion 토큰을 입력해주세요'); openSettings(); return; }
