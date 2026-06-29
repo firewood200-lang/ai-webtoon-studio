@@ -582,8 +582,7 @@ async function callGemini(systemPrompt, userPrompt, onChunk) {
     throw new Error(err?.error?.message || `Gemini 오류 (${res.status})`);
   }
   const data = await res.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  const text = rawText.replace(/\\n/g, '\n');
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   if (onChunk) onChunk(text, text);
   return text;
 }
@@ -1698,3 +1697,4 @@ fetch('/version.json?_=' + Date.now())
 </script>
 </body>
 </html>
+                                                  
