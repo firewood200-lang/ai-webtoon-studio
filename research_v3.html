@@ -1167,12 +1167,23 @@ function addAxis() {
         <button type="button" class="ai-tag claude" onclick="selectAI('Claude')">Claude</button>
       </div>
     </div>
-    <div class="field"><label>모델 (선택)</label><input id="ax-model" placeholder="예: gpt-4o, gemini-2.0-flash"></div>
+    <div class="field"><label>모델 (선택)</label><select id="ax-model" style="width:100%;padding:10px 12px;background:var(--bg-secondary,#1e1e2e);color:var(--text-primary,#e0e0e0);border:1px solid var(--border,#333);border-radius:8px;font-size:14px;"></select></div>
     <button type="button" class="btn btn-primary btn-full" onclick="confirmAddAxis()">추가</button>`);
+  updateModelOptions('GPT');
+}
+const MODEL_OPTIONS = {
+  GPT: ['gpt-4.1 (권장)','gpt-4.1-mini','gpt-4o','gpt-4o-mini','o3-mini'],
+  Gemini: ['gemini-2.5-flash (권장)','gemini-2.5-pro'],
+  Claude: ['claude-sonnet-4-6 (권장)','claude-opus-4-8','claude-haiku-4-5']
+};
+function updateModelOptions(ai) {
+  const sel = document.getElementById('ax-model'); if(!sel) return;
+  sel.innerHTML = (MODEL_OPTIONS[ai]||[]).map(m=>`<option value="${m.replace(' (권장)','')}">${m}</option>`).join('');
 }
 function selectAI(ai) {
   _selectedAI = ai;
   document.querySelectorAll('#ai-selector .ai-tag').forEach(el => el.classList.toggle('selected', el.textContent===ai));
+  updateModelOptions(ai);
 }
 function confirmAddAxis() {
   const p = currentProject(); if (!p) return;
