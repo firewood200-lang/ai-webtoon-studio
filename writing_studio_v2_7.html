@@ -143,8 +143,8 @@ header input{width:190px}
   <button onclick="addNode(&#39;folder&#39;)">그룹</button>
   <button onclick="addResource()">자료 추가</button>
   <button onclick="openResearchImport()">📥 리서치 불러오기</button>
-  <button onclick="exportJSON()">JSON 저장</button>
-  <button onclick="document.getElementById(&#39;fileInput&#39;).click()">JSON 불러오기</button>
+  <button onclick="exportJSON()" id="btnJsonSave">JSON 저장</button>
+  <button onclick="document.getElementById(&#39;fileInput&#39;).click()" id="btnJsonLoad">JSON 불러오기</button>
   <button onclick="exportTXT(false)">TXT 출력</button>
   <button onclick="exportTXT(true)" title="【태그】 제거 후 출력">TXT(태그제거)</button>
   <div class="admin-dropdown" id="adminDropdown">
@@ -868,6 +868,23 @@ function copyPaneText(key){
     navigator.clipboard.writeText(text).then(()=>showToast("복사 완료")).catch(fallback);
   }else{fallback()}
 }
+// 파일 핸들 (File System Access API)
+let _fileHandle = null;
+let _fileSaveTimer = null;
+function setFileHandle(handle){
+  _fileHandle = handle;
+  const btn = document.getElementById('btnJsonSave');
+  if(btn) btn.textContent = handle ? '💾 파일저장 (연결됨)' : 'JSON 저장';
+}
+async function writeToFileHandle(){
+  if(!_fileHandle) return;
+  try{
+    const writable = await _fileHandle.createWritable();
+    await writable.write(JSON.stringify(state, null, 2));
+    await writable.close();
+  }catch(e){ console.warn('파일 자동저장 실패:', e.message); }
+}
+
 function saveLocal(){
   const projects = loadProjects();
   const idx = projects.findIndex(p=>p.id===state.id);
@@ -875,6 +892,11 @@ function saveLocal(){
   else projects.push(state);
   localStorage.setItem('ws_projects', JSON.stringify(projects));
   localStorage.setItem('ws_current_id', state.id);
+  // 파일 핸들 연결된 경우 디바운스 자동저장
+  if(_fileHandle){
+    clearTimeout(_fileSaveTimer);
+    _fileSaveTimer = setTimeout(writeToFileHandle, 1000);
+  }
 }
 function loadProjects(){
   try{ return JSON.parse(localStorage.getItem('ws_projects')||'[]'); }catch(e){ return []; }
@@ -1314,8 +1336,24 @@ function runSearch(){
     box.appendChild(div);
   });
 }
-function exportJSON(){
-  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+async function exportJSON(){
+  const json = JSON.stringify(state, null, 2);
+  if(window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({
+        suggestedName: safe(state.title)+'.json',
+        types:[{description:'JSON',accept:{'application/json':['.json']}}]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      setFileHandle(handle);
+      showToast('파일 저장 완료 — 이후 자동저장 연결됨');
+      return;
+    }catch(e){ if(e.name==='AbortError') return; }
+  }
+  // 폴백: 다운로드
+  const blob=new Blob([json],{type:"application/json"});
   download(blob,safe(state.title)+".json");
 }
 function importJSON(e){
@@ -1332,7 +1370,12 @@ function importJSON(e){
       if(idx>=0) projects[idx]=s; else projects.push(s);
       localStorage.setItem('ws_projects',JSON.stringify(projects));
       state=s; saveLocal(); render();
-      showToast("프로젝트 불러오기 완료");
+      // File System Access API로 파일 핸들 연결 시도
+      if(window.showOpenFilePicker){
+        showToast('불러오기 완료 — JSON 저장 버튼으로 파일 연결하면 자동저장됩니다');
+      } else {
+        showToast('프로젝트 불러오기 완료');
+      }
     }catch(err){alert("올바른 프로젝트 JSON이 아닙니다.");}
   };
   r.readAsText(f); e.target.value="";
