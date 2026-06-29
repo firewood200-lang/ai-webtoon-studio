@@ -136,6 +136,10 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
 .apikey-display{flex:1;font-size:13px;color:var(--text2);letter-spacing:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .btn-apikey-toggle{background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px;}
 
+/* ── 슬롯 드래그앤드롭 ── */
+.slot-card.drag-over{border-style:solid!important;border-color:var(--accent2)!important;background:rgba(74,111,255,.12);}
+.slot-card.drag-over .slot-preview{opacity:.7;}
+
 /* ── 공통: 토스트 / 빈상태 ── */
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(30,30,60,.95);color:var(--text);padding:10px 20px;border-radius:20px;font-size:13px;z-index:400;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;}
@@ -666,6 +670,7 @@ const MODEL_COST_USD = {
 
 // ── 상태 ──
 let currentProcess = 'pentouch';
+let hoveredSlot = null; // { proc, slotId } — 마우스 호버 중인 슬롯
 let promptUnlocked = false;
 let lastResult = null;
 let lastElapsed = 0;
@@ -811,6 +816,38 @@ function renderSlotsIn(containerId) {
         renderSlots();
       });
     }
+
+    // ── 호버 추적 (붙여넣기용) ──
+    div.addEventListener('mouseenter', () => {
+      hoveredSlot = { proc: currentProcess, slotId: slot.id };
+    });
+    div.addEventListener('mouseleave', () => {
+      hoveredSlot = null;
+    });
+
+    // ── 드래그앤드롭 ──
+    div.addEventListener('dragover', e => {
+      e.preventDefault();
+      div.classList.add('drag-over');
+    });
+    div.addEventListener('dragleave', e => {
+      if(!div.contains(e.relatedTarget)) div.classList.remove('drag-over');
+    });
+    div.addEventListener('drop', async e => {
+      e.preventDefault();
+      div.classList.remove('drag-over');
+      const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
+                || (() => { // 클립보드 아이템 fallback
+                     const item = Array.from(e.dataTransfer.items||[]).find(i=>i.type.startsWith('image/'));
+                     return item ? item.getAsFile() : null;
+                   })();
+      if(!file) { showToast('이미지 파일만 드롭할 수 있습니다'); return; }
+      const base64 = await fileToBase64(file);
+      slotData[currentProcess][slot.id] = { base64, mime: file.type, name: file.name||'dropped.png' };
+      saveSlots();
+      renderSlots();
+      showToast(`${slot.label}에 이미지가 추가됐습니다`);
+    });
   });
 }
 
@@ -1040,6 +1077,35 @@ function bindEvents() {
     const isHidden = inp.type==='password';
     inp.type = isHidden ? 'text' : 'password';
     document.getElementById('btnApikeyToggle').textContent = isHidden ? '🔒' : '👁';
+  });
+
+  // ── 전역 붙여넣기 (Ctrl+V) ──
+  document.addEventListener('paste', async e => {
+    // 텍스트 입력 중이면 무시
+    const tag = document.activeElement?.tagName;
+    if(tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItem = items.find(i => i.type.startsWith('image/'));
+    if(!imageItem) return;
+
+    if(!hoveredSlot) {
+      // 호버 슬롯 없으면 현재 공정의 첫 번째 빈 슬롯에 자동 삽입
+      const slots = PROCESS_CONFIG[currentProcess].slots;
+      const emptySlot = slots.find(s => !slotData[currentProcess][s.id]);
+      if(!emptySlot) { showToast('슬롯 위에 마우스를 올린 후 붙여넣기 하세요'); return; }
+      hoveredSlot = { proc: currentProcess, slotId: emptySlot.id };
+    }
+
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if(!file) return;
+    const base64 = await fileToBase64(file);
+    const slotLabel = PROCESS_CONFIG[hoveredSlot.proc].slots.find(s=>s.id===hoveredSlot.slotId)?.label || hoveredSlot.slotId;
+    slotData[hoveredSlot.proc][hoveredSlot.slotId] = { base64, mime: file.type, name: 'pasted.png' };
+    saveSlots();
+    renderSlots();
+    showToast(`${slotLabel}에 이미지가 붙여넣기됐습니다`);
   });
 
   // 리사이즈 대응
