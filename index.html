@@ -717,6 +717,7 @@ function load() {
       { id: uid(), user_id: getCurrentUserId(), name: '리서치 워크플로우', desc: '자료 수집 및 정리', path: 'research_v3.html', tag: '리서치', icon: '🔍', lastOpen: null },
       { id: uid(), user_id: getCurrentUserId(), name: '작가실 스텝업', desc: '시나리오 멀티 에이전트 입출력기', path: 'writer-room.html', tag: '시나리오', icon: '✍️', lastOpen: null },
       { id: uid(), user_id: getCurrentUserId(), name: 'Writing Studio', desc: '집필실 — 시나리오·웹소설 작업', path: 'writing_studio_v2_7.html', tag: '집필', icon: '📖', lastOpen: null },
+      { id: uid(), user_id: getCurrentUserId(), name: '시나리오 프로젝트 방', desc: '플롯·캐릭터·에피소드·회차 설계 (Claude 프로젝트)', path: 'https://claude.ai/project/019e76da-4ed3-76e7-be34-90d30912731e', tag: '시나리오', icon: '🎬', lastOpen: null },
       { id: uid(), user_id: getCurrentUserId(), name: 'AI 워크플로우', desc: '웹툰 작화 — 이미지 생성 파이프라인', path: 'Ai-Workflow.html', tag: '그림', icon: '🎨', lastOpen: null },
     ];
     save();
@@ -922,6 +923,17 @@ function migrateIfNeeded() {
   });
   save();
   localStorage.setItem(MIGRATE_KEY, '1');
+
+  // v4: 시나리오 프로젝트 방 카드 추가
+  const MIGRATE_V4 = 'launcher_migrated_v4';
+  if (!localStorage.getItem(MIGRATE_V4)) {
+    const exists = apps.find(a => a.path && a.path.includes('019e76da'));
+    if (!exists) {
+      apps.push({ id: uid(), user_id: getCurrentUserId(), name: '시나리오 프로젝트 방', desc: '플롯·캐릭터·에피소드·회차 설계 (Claude 프로젝트)', path: 'https://claude.ai/project/019e76da-4ed3-76e7-be34-90d30912731e', tag: '시나리오', icon: '🎬', lastOpen: null });
+      save();
+    }
+    localStorage.setItem(MIGRATE_V4, '1');
+  }
 }
 
 function initDragDrop() {
