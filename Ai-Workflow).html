@@ -1531,6 +1531,51 @@ async function sendNotionLog({ status, elapsed, model, errDetail, costKrw=0, cos
   } catch(e) { console.warn('노션 로그 오류:', e); }
 }
 
+// ── 세션 종료 Notion 기록 ──
+function buildSessionSummaryBody() {
+  const key = config.notionKey;
+  if(!key || sessionStat.runs === 0) return null;
+  const now = new Date();
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const title = `[세션] ${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${timeStr} · ${sessionStat.runs}회 실행`;
+  return {
+    parent: { database_id: NOTION_DS_ID },
+    properties: {
+      '제목':         { title:[{ text:{ content:title } }] },
+      '공정':         { select:{ name:'세션요약' } },
+      '상태':         { select:{ name:'성공' } },
+      '카테고리':     { select:{ name:'세션' } },
+      '날짜':         { date:{ start:now.toISOString(), end:null } },
+      '비용(원)':     { number:sessionStat.totalCost||0 },
+      '오류상세':     { rich_text:[{ text:{ content:`실행:${sessionStat.runs} 성공:${sessionStat.ok} 실패:${sessionStat.err}` } }] },
+    }
+  };
+}
+
+// 탭 닫기/새로고침 전: 브라우저 기본 "떠나시겠습니까?" 다이얼로그
+window.addEventListener('beforeunload', (e) => {
+  if(sessionStat.runs > 0) {
+    e.preventDefault();
+    e.returnValue = '';  // Chrome 필수
+  }
+});
+
+// 실제 종료 시: keepalive fetch로 Notion에 세션 요약 자동 전송
+window.addEventListener('pagehide', () => {
+  const key = config.notionKey;
+  if(!key) return;
+  const body = buildSessionSummaryBody();
+  if(!body) return;
+  try {
+    fetch('https://notion-proxy.firewood2000.workers.dev/v1/pages', {
+      method: 'POST',
+      headers: { 'X-Notion-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      keepalive: true
+    });
+  } catch(e) {}
+});
+
 async function manualNotionLog() {
   if(!config.notionKey) { showToast('설정에서 Notion API 키를 입력해주세요'); openSettings(); return; }
   showToast('노션에 기록 중...');
