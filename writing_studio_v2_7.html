@@ -1706,9 +1706,9 @@ async function searchResearchResults(){
     ]
   } : {};
   try{
-    const res = await fetch(`${proxy}/databases/${dbId}/query`,{
+    const res = await fetch(`${proxy}/v1/databases/${dbId}/query`,{
       method:'POST',
-      headers:{'Authorization':'Bearer '+token,'Notion-Version':'2022-06-28','Content-Type':'application/json'},
+      headers:{'X-Notion-Key':token,'Content-Type':'application/json'},
       body: JSON.stringify({filter: query?filter:{}, page_size:30, sorts:[{property:'저장일',direction:'descending'}]})
     });
     if(!res.ok){const e=await res.json().catch(()=>({}));statusEl.textContent='오류: '+(e.message||res.status);return;}
@@ -1742,8 +1742,8 @@ async function importResearchPage(pageId, title, proj, axis, ai, divEl){
   const statusEl=document.getElementById('ri-status');
   statusEl.textContent='본문 불러오는 중…';
   try{
-    const res=await fetch(`${proxy}/blocks/${pageId}/children?page_size=100`,{
-      headers:{'Authorization':'Bearer '+token,'Notion-Version':'2022-06-28'}
+    const res=await fetch(`${proxy}/v1/blocks/${pageId}/children?page_size=100`,{
+      headers:{'X-Notion-Key':token,'Content-Type':'application/json'}
     });
     if(!res.ok){statusEl.textContent='본문 오류: '+res.status;return;}
     const data=await res.json();
