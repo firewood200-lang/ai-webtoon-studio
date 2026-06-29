@@ -238,7 +238,7 @@ body.reader-lock{overflow:hidden}
 
   <div style="font-size:13px;font-weight:500;margin-bottom:8px">노션 연동</div>
   <div class="settings-row"><label>Notion API 토큰</label><input type="password" id="cfg-token" placeholder="secret_..."></div>
-  <div class="settings-row"><label>저장할 Notion 페이지 ID</label><input type="text" id="cfg-page-id" placeholder="3868169c..."></div>
+  <div class="settings-row"><label>저장할 Notion 페이지 URL</label><input type="text" id="cfg-page-id" placeholder="https://www.notion.so/..."></div>
   <div class="settings-row"><label>Cloudflare Workers URL</label><input type="text" id="cfg-worker-url" placeholder="https://notion-proxy..."></div>
   <button class="run-btn" style="margin-top:4px" onclick="saveSettings()">설정 저장</button>
 </div>
@@ -682,15 +682,15 @@ function getCurrentUserId() {
 }
 
 /* ========== CONFIG ========== */
-const DEFAULT_CFG={token:'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',pageId:'3868169c-6a21-8136-8a4e-dd99f841f4b2',workerUrl:'https://notion-proxy.firewood2000.workers.dev'};
+const DEFAULT_CFG={token:'',pageId:'',pageUrl:'',workerUrl:'https://notion-proxy.firewood2000.workers.dev'};
 function getCfg(){try{return JSON.parse(localStorage.getItem('ccv2_cfg')||'{}')}catch(e){return{}}}
 function saveSettings(){
-  // pageId: URL 전체가 들어와도 ID만 추출
-  let rawPageId=g('cfg-page-id');
-  const idMatch=rawPageId.match(/[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/i);
-  if(idMatch){rawPageId=idMatch[0];}
-  if(/^[0-9a-f]{32}$/i.test(rawPageId)){rawPageId=rawPageId.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5');}
-  const cfg={claudeKey:g('cfg-claude-key'),openaiKey:g('cfg-openai-key'),geminiKey:g('cfg-gemini-key'),claudeModel:document.getElementById('cfg-claude-model').value,gptModel:document.getElementById('cfg-gpt-model').value,geminiModel:document.getElementById('cfg-gemini-model').value,token:g('cfg-token'),pageId:rawPageId,workerUrl:g('cfg-worker-url')||DEFAULT_CFG.workerUrl};
+  // pageUrl: 입력값 원본 보존, pageId: URL에서 추출한 ID
+  const pageUrl=g('cfg-page-id');
+  const idMatch=pageUrl.match(/[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/i);
+  let pageId=idMatch?idMatch[0]:pageUrl;
+  if(/^[0-9a-f]{32}$/i.test(pageId)){pageId=pageId.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5');}
+  const cfg={claudeKey:g('cfg-claude-key'),openaiKey:g('cfg-openai-key'),geminiKey:g('cfg-gemini-key'),claudeModel:document.getElementById('cfg-claude-model').value,gptModel:document.getElementById('cfg-gpt-model').value,geminiModel:document.getElementById('cfg-gemini-model').value,token:g('cfg-token'),pageId,pageUrl,workerUrl:g('cfg-worker-url')||DEFAULT_CFG.workerUrl};
   localStorage.setItem('ccv2_cfg',JSON.stringify(cfg));toast('설정 저장됨');toggleSettings();
 }
 function loadSettings(){
@@ -699,7 +699,7 @@ function loadSettings(){
   s('cfg-claude-key',c.claudeKey);s('cfg-openai-key',c.openaiKey);s('cfg-gemini-key',c.geminiKey);
   const sel=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
   sel('cfg-claude-model',c.claudeModel);sel('cfg-gpt-model',c.gptModel);sel('cfg-gemini-model',c.geminiModel);
-  s('cfg-token',c.token||DEFAULT_CFG.token);s('cfg-page-id',c.pageId||DEFAULT_CFG.pageId);s('cfg-worker-url',c.workerUrl||DEFAULT_CFG.workerUrl);
+  s('cfg-token',c.token||'');s('cfg-page-id',c.pageUrl||c.pageId||'');s('cfg-worker-url',c.workerUrl||DEFAULT_CFG.workerUrl);
 }
 function toggleSettings(){document.getElementById('settings-panel').classList.toggle('open')}
 
