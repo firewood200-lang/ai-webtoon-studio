@@ -909,6 +909,17 @@ function showToast(msg) {
 }
 
 function migrateIfNeeded() {
+  // v4: 시나리오 프로젝트 방 카드 추가 (early return 전에 처리)
+  const MIGRATE_V4 = 'launcher_migrated_v4';
+  if (!localStorage.getItem(MIGRATE_V4)) {
+    const exists = apps.find(a => a.path && a.path.includes('019e76da'));
+    if (!exists) {
+      apps.push({ id: uid(), user_id: getCurrentUserId(), name: '시나리오 프로젝트 방', desc: '플롯·캐릭터·에피소드·회차 설계 (Claude 프로젝트)', path: 'https://claude.ai/project/019e76da-4ed3-76e7-be34-90d30912731e', tag: '시나리오', icon: '🎬', lastOpen: null });
+      save();
+    }
+    localStorage.setItem(MIGRATE_V4, '1');
+  }
+
   const MIGRATE_KEY = 'launcher_migrated_v2';
   if (localStorage.getItem(MIGRATE_KEY)) return;
   if (!apps.find(a => a.path && a.path.includes('Ai-Workflow'))) {
@@ -923,17 +934,6 @@ function migrateIfNeeded() {
   });
   save();
   localStorage.setItem(MIGRATE_KEY, '1');
-
-  // v4: 시나리오 프로젝트 방 카드 추가
-  const MIGRATE_V4 = 'launcher_migrated_v4';
-  if (!localStorage.getItem(MIGRATE_V4)) {
-    const exists = apps.find(a => a.path && a.path.includes('019e76da'));
-    if (!exists) {
-      apps.push({ id: uid(), user_id: getCurrentUserId(), name: '시나리오 프로젝트 방', desc: '플롯·캐릭터·에피소드·회차 설계 (Claude 프로젝트)', path: 'https://claude.ai/project/019e76da-4ed3-76e7-be34-90d30912731e', tag: '시나리오', icon: '🎬', lastOpen: null });
-      save();
-    }
-    localStorage.setItem(MIGRATE_V4, '1');
-  }
 }
 
 function initDragDrop() {
