@@ -585,8 +585,8 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
     <div class="settings-section-title">노션 연동</div>
     <div class="settings-card">
       <div class="settings-row">
-        <span class="settings-lbl">Notion API 키</span>
-        <input class="settings-input" id="notionKeyInput" type="password" placeholder="secret_..." autocomplete="off">
+        <span class="settings-lbl">Notion 토큰</span>
+        <input class="settings-input" id="notionKeyInput" type="password" placeholder="ntn_..." autocomplete="off">
       </div>
     </div>
 
@@ -1587,7 +1587,7 @@ window.addEventListener('pagehide', () => {
 });
 
 async function manualNotionLog() {
-  if(!config.notionKey) { showToast('설정에서 Notion API 키를 입력해주세요'); openSettings(); return; }
+  if(!config.notionKey) { showToast('설정에서 Notion 토큰을 입력해주세요'); openSettings(); return; }
   showToast('노션에 기록 중...');
   try {
     await sendNotionLog({
