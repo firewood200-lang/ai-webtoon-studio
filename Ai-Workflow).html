@@ -1647,5 +1647,12 @@ async function manualNotionLog() {
   console.error=function(){var a=Array.prototype.slice.call(arguments);add(a.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);}).join(' '),'console','');_ce.apply(console,arguments);};
 })();
 </script>
+<div id="buildVersion" style="position:fixed;bottom:8px;left:8px;font-size:10px;color:#555;font-family:monospace;z-index:8888;pointer-events:none;">v—</div>
+<script>
+fetch('/version.json?_=' + Date.now())
+  .then(r => r.json())
+  .then(d => { document.getElementById('buildVersion').textContent = 'v' + d.built; })
+  .catch(() => {});
+</script>
 </body>
 </html>
