@@ -1404,13 +1404,6 @@ function renderOutput() {
     </div>
     <div id="output-preview"></div>
     <div class="divider"></div>
-    <div class="section-title">작가실 연동</div>
-    <div class="card">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">리서치 결과를 집필실 참고자료 B에 자동 추가합니다.<br>전송 후 집필실을 열면 참고자료 B에 문서가 추가됩니다.</div>
-      <button class="btn btn-primary" style="width:100%;font-size:13px;" onclick="sendToWriterRoom()">→ 집필실로 보내기</button>
-      <div id="wr-send-status" style="font-size:11px;color:var(--text3);margin-top:6px;min-height:16px;"></div>
-    </div>
-    <div class="divider"></div>
     <div class="section-title">노션 저장</div>
     <div class="card">
       <div style="font-size:13px;color:var(--text2);margin-bottom:10px">축별 저장 또는 프로젝트 전체 저장</div>
@@ -1471,26 +1464,6 @@ function showOutputMode(mode) {
   _currentOutputText = text;
 }
 
-function sendToWriterRoom() {
-  const p = currentProject();
-  if (!p) { toast('프로젝트를 선택하세요.'); return; }
-  const text = _outputMode === 'text' ? generateTextOutput() : generateMdOutput();
-  if (!text.trim()) { toast('출력할 내용이 없습니다.'); return; }
-  try {
-    const payload = {
-      projectTitle: p.title,
-      content: text,
-      exportedAt: new Date().toISOString(),
-      mode: _outputMode
-    };
-    localStorage.setItem('wr_inject', JSON.stringify(payload));
-    const el = document.getElementById('wr-send-status');
-    if (el) el.textContent = `✓ 전송 완료 (${new Date().toLocaleTimeString('ko-KR')}) — 작가실 STEP 1에서 불러오기 버튼을 누르세요.`;
-    toast('→ 작가실로 전송했습니다.');
-  } catch(e) {
-    toast('전송 실패: ' + e.message);
-  }
-}
 function downloadOutput(mode) {
   const ext = mode === 'md' ? 'md' : 'txt';
   const p = currentProject();
