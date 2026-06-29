@@ -1431,7 +1431,7 @@ async function saveToNotion(){
   try{toast('노션 저장 중...',5000);const res=await fetch(workerUrl+'/pages',{method:'POST',headers:{'Content-Type':'application/json','X-Notion-Key':token},body:JSON.stringify({parent:{page_id:pageId},properties:{title:{title:[{text:{content:title}}]}},children})});if(res.ok)toast('노션 저장 완료');else{const err=await res.text();toast('저장 실패: '+err.slice(0,80));}}catch(e){toast('저장 오류: '+e.message);}
 }
 
-/* ========== 초�
+/* ========== 초�
 기화 ========== */
 try{const saved=localStorage.getItem('ccv2');if(saved)applySession(JSON.parse(saved));}catch(e){}
 </script>
@@ -1494,6 +1494,13 @@ try{const saved=localStorage.getItem('ccv2');if(saved)applySession(JSON.parse(sa
   var _ce=console.error;
   console.error=function(){var a=Array.prototype.slice.call(arguments);add(a.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);}).join(' '),'console','');_ce.apply(console,arguments);};
 })();
+</script>
+<div id="buildVersion" style="position:fixed;top:10px;left:16px;font-size:12px;color:#ffffff;font-family:monospace;z-index:8888;pointer-events:none;font-weight:600;letter-spacing:0.03em;">배포 —</div>
+<script>
+fetch('/version.json?_=' + Date.now())
+  .then(r => r.json())
+  .then(d => { document.getElementById('buildVersion').textContent = '배포 ' + d.built; })
+  .catch(() => {});
 </script>
 </body>
 </html>

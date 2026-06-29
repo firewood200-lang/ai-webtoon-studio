@@ -1685,5 +1685,12 @@ render();
   console.error=function(){var a=Array.prototype.slice.call(arguments);add(a.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);}).join(' '),'console','');_ce.apply(console,arguments);};
 })();
 </script>
+<div id="buildVersion" style="position:fixed;top:10px;left:16px;font-size:12px;color:#ffffff;font-family:monospace;z-index:8888;pointer-events:none;font-weight:600;letter-spacing:0.03em;">배포 —</div>
+<script>
+fetch('/version.json?_=' + Date.now())
+  .then(r => r.json())
+  .then(d => { document.getElementById('buildVersion').textContent = '배포 ' + d.built; })
+  .catch(() => {});
+</script>
 </body>
 </html>
