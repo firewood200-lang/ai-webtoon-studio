@@ -1186,8 +1186,8 @@ async function runProcess() {
   const cutNumber   = getCut();
 
   if(!cutNumber.trim()) {
-    const ok = confirm('컷번호가 입력되지 않았습니다.\n컷번호 없이 실행할까요?');
-    if(!ok) return;
+    alert('컷번호를 입력해주세요.');
+    return;
   }
 
   setBtnRunDisabled(true);
