@@ -61,15 +61,17 @@ textarea.prompt-text{width:100%;min-height:140px;background:transparent;color:va
 .prompt-blur-input{background:var(--bg3);color:var(--text);border:1.5px solid var(--accent);border-radius:8px;padding:8px 14px;font-size:14px;outline:none;width:200px;text-align:center;}
 .btn-prompt-unlock{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
 
-/* ── 공통: 미세수정 ── */
+/* ── 공통: 컷번호 (강조) ── */
+.cut-number-card{display:flex;align-items:center;gap:10px;padding:13px 16px;background:rgba(74,111,255,0.1);border:1.5px solid var(--accent);border-radius:12px;margin-bottom:8px;}
+.cut-number-lbl{font-size:11px;font-weight:700;color:var(--accent2);flex-shrink:0;min-width:52px;letter-spacing:.4px;}
+input.cut-number-m{flex:1;background:transparent;color:var(--text);border:none;font-size:16px;font-weight:700;font-family:'Consolas',monospace;outline:none;padding:2px 0;}
+input.cut-number-m::placeholder{color:var(--text3);font-weight:400;font-size:13px;}
+/* ── 공통: 미세수정 (보조) ── */
 .fine-tune-card{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:12px;}
 .fine-tune-inner{display:flex;align-items:center;gap:10px;padding:10px 14px;}
 .fine-tune-lbl{font-size:11px;color:var(--text3);flex-shrink:0;min-width:56px;}
-input.fine-tune{flex:1;background:transparent;color:var(--text);border:none;font-size:13px;font-family:inherit;outline:none;padding:4px 0;}
+input.fine-tune{flex:1;background:transparent;color:var(--text2);border:none;font-size:12px;font-family:inherit;outline:none;padding:4px 0;}
 input.fine-tune::placeholder{color:var(--text3);}
-.cut-number-inner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);}
-input.cut-number-m{flex:1;background:transparent;color:var(--text);border:none;font-size:13px;font-family:'Consolas',monospace;outline:none;padding:4px 0;}
-input.cut-number-m::placeholder{color:var(--text3);}
 
 /* ── 공통: 컨트롤 카드 ── */
 .ctrl-card{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:12px;}
@@ -296,11 +298,11 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
           </div>
         </div>
       </div>
+      <div class="cut-number-card">
+        <span class="cut-number-lbl">컷번호</span>
+        <input class="cut-number-m" id="cutNumber" type="text" placeholder="C-001">
+      </div>
       <div class="fine-tune-card">
-        <div class="cut-number-inner">
-          <span class="fine-tune-lbl">컷번호</span>
-          <input class="cut-number-m" id="cutNumber" type="text" placeholder="예: C-001">
-        </div>
         <div class="fine-tune-inner">
           <span class="fine-tune-lbl">미세수정</span>
           <input class="fine-tune" id="fineTune" type="text" placeholder="추가 지시사항 (실행 후 자동 초기화)">
@@ -424,11 +426,11 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
         </div>
       </div>
     </div>
+    <div class="cut-number-card">
+      <span class="cut-number-lbl">컷번호</span>
+      <input class="cut-number-m" id="dCutNumber" type="text" placeholder="C-001">
+    </div>
     <div class="fine-tune-card">
-      <div class="cut-number-inner">
-        <span class="fine-tune-lbl">컷번호</span>
-        <input class="cut-number-m" id="dCutNumber" type="text" placeholder="예: C-001">
-      </div>
       <div class="fine-tune-inner">
         <span class="fine-tune-lbl">미세수정</span>
         <input class="fine-tune" id="dFineTune" type="text" placeholder="추가 지시사항 (실행 후 자동 초기화)">
@@ -684,6 +686,8 @@ let dRating = 0;  // 데스크탑 별점
 
 const slotData = Object.fromEntries(Object.keys(PROCESS_CONFIG).map(k=>[k,{}]));
 const sessionStat = { runs:0, ok:0, err:0, totalCost:0, totalTime:0 };
+const PROC_ABBR = { pentouch:'pen', coloring:'color', bglineart:'bg', bgcoloring:'bgc', lora:'lora' };
+const runCount = {}; // 세션 내 (컷번호_공정) 별 실행 횟수
 const statByProc = {};
 let logHistory = [];  // 영속화 배열
 
@@ -1157,7 +1161,9 @@ function saveToGallery() {
   try {
     const link = document.createElement('a');
     link.href = `data:${lastResult.mime};base64,${lastResult.base64}`;
-    link.download = `ai_${currentProcess}_${Date.now()}.jpg`;
+    const _abbr = PROC_ABBR[currentProcess] || currentProcess;
+    const _cut = getCut().trim() || 'no-cut';
+    link.download = `${_cut}-${_abbr}.jpg`;
     link.click();
     showToast('저장됐습니다 📷');
   } catch(e) { showToast('저장 실패: '+e.message); }
@@ -1226,9 +1232,13 @@ async function runProcess() {
     setStatus('ok',`완료 (${elapsed}초)`);
     lastResult = { base64:result.base64, mime:result.mime };
     try {
+      const abbr = PROC_ABBR[currentProcess] || currentProcess;
+      const countKey = `${cutNumber}_${currentProcess}`;
+      runCount[countKey] = (runCount[countKey] || 0) + 1;
+      const seq = runCount[countKey] > 1 ? `-${runCount[countKey]}` : '';
       const link = document.createElement('a');
       link.href = `data:${result.mime};base64,${result.base64}`;
-      link.download = `ai_${currentProcess}${cutNumber?'_'+cutNumber:''}_${Date.now()}.jpg`;
+      link.download = `${cutNumber}-${abbr}${seq}.jpg`;
       link.click();
     } catch(e){}
     showResult(images[0], result, elapsed, model);
@@ -1647,7 +1657,7 @@ async function manualNotionLog() {
   console.error=function(){var a=Array.prototype.slice.call(arguments);add(a.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);}).join(' '),'console','');_ce.apply(console,arguments);};
 })();
 </script>
-<div id="buildVersion" style="position:fixed;bottom:14px;right:16px;font-size:10px;color:rgba(255,255,255,0.85);font-family:monospace;z-index:8888;pointer-events:none;background:rgba(0,0,0,0.55);border:1px solid rgba(0,0,0,0.2);border-radius:20px;padding:3px 10px;letter-spacing:0.04em;">배포 —</div>
+<div id="buildVersion" style="position:fixed;bottom:14px;left:16px;font-size:10px;color:rgba(255,255,255,0.85);font-family:monospace;z-index:8888;pointer-events:none;background:rgba(0,0,0,0.55);border:1px solid rgba(0,0,0,0.2);border-radius:20px;padding:3px 10px;letter-spacing:0.04em;">배포 —</div>
 <script>
 fetch('/version.json?_=' + Date.now())
   .then(r => r.json())
