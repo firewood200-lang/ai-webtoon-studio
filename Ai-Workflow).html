@@ -140,6 +140,10 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
 .slot-card.drag-over{border-style:solid!important;border-color:var(--accent2)!important;background:rgba(74,111,255,.12);}
 .slot-card.drag-over .slot-preview{opacity:.7;}
 
+/* ── 실행 버튼 스피너 ── */
+@keyframes spin{to{transform:rotate(360deg);}}
+.btn-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px;}
+
 /* ── 공통: 토스트 / 빈상태 ── */
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(30,30,60,.95);color:var(--text);padding:10px 20px;border-radius:20px;font-size:13px;z-index:400;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;}
@@ -1181,6 +1185,11 @@ async function runProcess() {
   const retryMax    = parseInt(config.retryCount ?? 1);
   const cutNumber   = getCut();
 
+  if(!cutNumber.trim()) {
+    const ok = confirm('컷번호가 입력되지 않았습니다.\n컷번호 없이 실행할까요?');
+    if(!ok) return;
+  }
+
   setBtnRunDisabled(true);
   setStatus('running','처리 중... 0초');
 
@@ -1240,7 +1249,17 @@ async function runProcess() {
 }
 
 function setBtnRunDisabled(v) {
-  ['btnRun','dBtnRun'].forEach(id => { const e=document.getElementById(id); if(e) e.disabled=v; });
+  ['btnRun','dBtnRun'].forEach(id => {
+    const e=document.getElementById(id);
+    if(!e) return;
+    e.disabled=v;
+    if(v) {
+      e.dataset.origHtml = e.innerHTML;
+      e.innerHTML = '<span class="btn-spinner"></span> 처리 중...';
+    } else {
+      if(e.dataset.origHtml) e.innerHTML = e.dataset.origHtml;
+    }
+  });
 }
 
 async function callGemini({ prompt, images, model, imageSize, aspectRatio, temperature, apiKey, signal }) {
@@ -1505,7 +1524,7 @@ async function sendNotionLog({ status, elapsed, model, errDetail, costKrw=0, cos
   try {
     const res = await fetch('https://notion-proxy.firewood2000.workers.dev/v1/pages', {
       method:'POST',
-      headers:{ 'X-Notion-Key':key, 'Content-Type':'application/json', 'Notion-Version':'2022-06-28' },
+      headers:{ 'X-Notion-Key':key, 'Content-Type':'application/json' },
       body: JSON.stringify({ parent:{ database_id:NOTION_DS_ID }, properties })
     });
     if(!res.ok) console.warn('노션 로그 실패:', await res.text());
