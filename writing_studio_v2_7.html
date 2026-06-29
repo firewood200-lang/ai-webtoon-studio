@@ -1767,22 +1767,22 @@ async function searchResearchResults(){
         <div style="font-size:11px;color:#888">${esc(sub)}</div>`;
       div.onmouseover=()=>div.style.borderColor='#c8a96e';
       div.onmouseout=()=>div.style.borderColor='#3a3530';
-      div.onclick=()=>importResearchPage(pageId, title, dbType, dbLabel, sub, div);
+      div.onclick=()=>importResearchPage(pageId, title, dbType, dbLabel, sub, props, div);
       resultsEl.appendChild(div);
     });
   }catch(e){statusEl.textContent='네트워크 오류: '+e.message;}
 }
 
-async function importResearchPage(pageId, title, dbType, dbLabel, sub, divEl){
+async function importResearchPage(pageId, title, dbType, dbLabel, sub, pageProps, divEl){
   const token=wsNotion.token; const proxy=wsNotion.proxy;
   const statusEl=document.getElementById('ri-status');
   statusEl.textContent='본문 불러오는 중…';
   try{
     let body='';
     if(dbType==='results'){
-      // 결과 DB: 하위 블록에서 텍스트 추출
+      // 결과 DB: 하위 블록에서 텍스트 추출 (GET /v1/blocks 는 프록시가 허용)
       const res=await fetch(`${proxy}/v1/blocks/${pageId}/children?page_size=100`,{
-        headers:{'X-Notion-Key':token,'Content-Type':'application/json'}
+        headers:{'X-Notion-Key':token}
       });
       if(res.ok){
         const data=await res.json();
@@ -1790,39 +1790,22 @@ async function importResearchPage(pageId, title, dbType, dbLabel, sub, divEl){
           const type=b.type;
           return (b[type]?.rich_text||[]).map(t=>t.plain_text).join('');
         }).filter(Boolean).join('\n\n');
+      } else {
+        statusEl.textContent='본문 오류: '+res.status; return;
       }
     } else {
-      // 조사축/프로젝트 DB: properties에서 텍스트 구성
-      const res=await fetch(`${proxy}/v1/pages/${pageId}`,{
-        headers:{'X-Notion-Key':token,'Content-Type':'application/json'}
+      // 조사축/프로젝트 DB: 검색 시 이미 받은 properties 사용 (추가 API 호출 없음)
+      const lines=[];
+      Object.entries(pageProps||{}).forEach(([key,val])=>{
+        let text='';
+        if(val.type==='title') text=(val.title||[]).map(t=>t.plain_text).join('');
+        else if(val.type==='rich_text') text=(val.rich_text||[]).map(t=>t.plain_text).join('');
+        else if(val.type==='select') text=val.select?.name||'';
+        else if(val.type==='number') text=val.number!=null?String(val.number):'';
+        else if(val.type==='date') text=val.date?.start||'';
+        if(text) lines.push(`${key}: ${text}`);
       });
-      if(res.ok){
-        const page=await res.json();
-        const props=page.properties||{};
-        const lines=[];
-        Object.entries(props).forEach(([key,val])=>{
-          let text='';
-          if(val.type==='title') text=(val.title||[]).map(t=>t.plain_text).join('');
-          else if(val.type==='rich_text') text=(val.rich_text||[]).map(t=>t.plain_text).join('');
-          else if(val.type==='select') text=val.select?.name||'';
-          else if(val.type==='number') text=val.number!=null?String(val.number):'';
-          else if(val.type==='date') text=val.date?.start||'';
-          if(text) lines.push(`${key}: ${text}`);
-        });
-        body=lines.join('\n');
-        // 하위 블록도 추가 시도
-        const bRes=await fetch(`${proxy}/v1/blocks/${pageId}/children?page_size=100`,{
-          headers:{'X-Notion-Key':token,'Content-Type':'application/json'}
-        });
-        if(bRes.ok){
-          const bData=await bRes.json();
-          const bText=(bData.results||[]).map(b=>{
-            const type=b.type;
-            return (b[type]?.rich_text||[]).map(t=>t.plain_text).join('');
-          }).filter(Boolean).join('\n\n');
-          if(bText) body+='\n\n'+bText;
-        }
-      }
+      body=lines.join('\n');
     }
     const r={
       id:uid(),
