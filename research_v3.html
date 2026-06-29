@@ -1539,7 +1539,8 @@ function openSettings() {
     <div class="setting-item">
       <div class="setting-label">노션 토큰</div>
       <div class="setting-desc">Workers에 저장된 경우 비워두셔도 됩니다</div>
-      ${inp('s-notion-token', s.notionToken, 'secret_...', 'password')}
+      ${inp('s-notion-token', s.notionToken, 'ntn_...', 'password')}
+      <button onclick="testNotionConn()" style="margin-top:8px;background:#4a6fff;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;">테스트 전송</button>
     </div>
     <div class="setting-item">
       <div class="setting-label">프로젝트 DB ID</div>
@@ -1582,6 +1583,25 @@ function setFontSize(v) {
   document.getElementById('fs-val').textContent = v;
   applySettings();
 }
+async function testNotionConn() {
+  const token = document.getElementById('s-notion-token')?.value.trim() || state.settings.notionToken;
+  const proxy = state.settings.notionProxy || 'https://notion-proxy.firewood2000.workers.dev';
+  const db = state.settings.notionProjectDB;
+  if(!token) { toast('토큰을 먼저 입력해주세요'); return; }
+  toast('노션 연결 테스트 중...');
+  try {
+    const now = new Date();
+    const res = await fetch(proxy + '/v1/pages', {
+      method:'POST',
+      headers:{'X-Notion-Key':token,'Content-Type':'application/json'},
+      body: JSON.stringify({ parent:{database_id:db}, properties:{ '이름':{title:[{text:{content:`[연결테스트] ${now.toLocaleTimeString('ko-KR')}`}}]} } })
+    });
+    const data = await res.json();
+    if(res.ok) toast('✓ 노션 연결 성공!');
+    else toast('✗ 실패: ' + (data.message || res.status));
+  } catch(e) { toast('✗ 오류: ' + e.message); }
+}
+
 function saveSettings() {
   const g = id => document.getElementById(id)?.value.trim();
   const s = state.settings;
