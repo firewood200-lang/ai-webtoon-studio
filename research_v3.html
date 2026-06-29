@@ -860,25 +860,25 @@ async function notionSaveResult(result, axis, proj, idx) {
   for(let i=0;i<content.length;i+=1900) chunks.push(content.slice(i,i+1900));
   const children = chunks.map(c=>({object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:c}}]}}));
 
-  const searchData = await notionRequest(`${proxy}/databases/${dbId}/query`, {
+  const searchData = await notionRequest(`${proxy}/v1/databases/${dbId}/query`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filter: { property: '결과ID', rich_text: { equals: resultId } } })
   }, '결과 DB 검색');
   const existing = searchData?.results?.[0];
   if (existing) {
-    await notionRequest(`${proxy}/pages/${existing.id}`, {
+    await notionRequest(`${proxy}/v1/pages/${existing.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ properties: props })
     }, '결과 업데이트');
   } else {
-    const created = await notionRequest(`${proxy}/pages`, {
+    const created = await notionRequest(`${proxy}/v1/pages`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ parent: { database_id: dbId }, properties: props, children: children.slice(0,100) })
     }, '결과 생성');
     // 100블록 초과 시 추가 append
     if(created?.id && children.length > 100) {
       for(let i=100;i<children.length;i+=100) {
-        await notionRequest(`${proxy}/blocks/${created.id}/children`, {
+        await notionRequest(`${proxy}/v1/blocks/${created.id}/children`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ children: children.slice(i,i+100) })
         }, '결과 블록 추가');
@@ -893,7 +893,7 @@ async function notionSaveAxis(axis, proj) {
   const dbId = cleanDbId(state.settings.notionAxesDB);
   if (!proxy || !dbId) { toast('⚙️ 설정에서 조사축 DB ID를 입력해주세요'); return; }
   try {
-    const searchData = await notionRequest(`${proxy}/databases/${dbId}/query`, {
+    const searchData = await notionRequest(`${proxy}/v1/databases/${dbId}/query`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filter: { and: [
         { property: '축ID', rich_text: { equals: axis.id } },
@@ -917,12 +917,12 @@ async function notionSaveAxis(axis, proj) {
       // '사용자ID': { rich_text: [{ text: { content: getCurrentUserId() } }] }
     };
     if (existing) {
-      await notionRequest(`${proxy}/pages/${existing.id}`, {
+      await notionRequest(`${proxy}/v1/pages/${existing.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ properties: props })
       }, '조사축 업데이트');
     } else {
-      await notionRequest(`${proxy}/pages`, {
+      await notionRequest(`${proxy}/v1/pages`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ parent: { database_id: dbId }, properties: props })
       }, '조사축 생성');
@@ -949,7 +949,7 @@ async function notionSaveProject(proj) {
   const dbId = cleanDbId(state.settings.notionProjectDB);
   if (!proxy || !dbId) { toast('⚙️ 설정에서 프로젝트 DB ID를 입력해주세요'); return; }
   try {
-    const searchData = await notionRequest(`${proxy}/databases/${dbId}/query`, {
+    const searchData = await notionRequest(`${proxy}/v1/databases/${dbId}/query`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filter: { property: '프로젝트ID', rich_text: { equals: proj.id } } })
     }, '프로젝트 DB 검색');
@@ -966,12 +966,12 @@ async function notionSaveProject(proj) {
     };
     if (proj.brief) props['기획안요약'] = { rich_text: [{ text: { content: proj.brief.replace(/#+\s*/g,'').replace(/\*+/g,'').replace(/_{2,}/g,'').replace(/`/g,'').trim().slice(0,300) } }] };
     if (existing) {
-      await notionRequest(`${proxy}/pages/${existing.id}`, {
+      await notionRequest(`${proxy}/v1/pages/${existing.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ properties: props })
       }, '프로젝트 업데이트');
     } else {
-      await notionRequest(`${proxy}/pages`, {
+      await notionRequest(`${proxy}/v1/pages`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ parent: { database_id: dbId }, properties: props })
       }, '프로젝트 생성');
