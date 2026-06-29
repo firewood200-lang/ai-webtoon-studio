@@ -1594,7 +1594,7 @@ async function testNotionConn() {
     const res = await fetch(proxy + '/v1/pages', {
       method:'POST',
       headers:{'X-Notion-Key':token,'Content-Type':'application/json'},
-      body: JSON.stringify({ parent:{database_id:db}, properties:{ '이름':{title:[{text:{content:`[연결테스트] ${now.toLocaleTimeString('ko-KR')}`}}]} } })
+      body: JSON.stringify({ parent:{database_id:db}, properties:{ '제목':{title:[{text:{content:`[연결테스트] ${now.toLocaleTimeString('ko-KR')}`}}]} } })
     });
     const data = await res.json();
     if(res.ok) toast('✓ 노션 연결 성공!');
