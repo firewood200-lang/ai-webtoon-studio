@@ -685,7 +685,12 @@ function getCurrentUserId() {
 const DEFAULT_CFG={token:'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',pageId:'3868169c-6a21-8136-8a4e-dd99f841f4b2',workerUrl:'https://notion-proxy.firewood2000.workers.dev'};
 function getCfg(){try{return JSON.parse(localStorage.getItem('ccv2_cfg')||'{}')}catch(e){return{}}}
 function saveSettings(){
-  const cfg={claudeKey:g('cfg-claude-key'),openaiKey:g('cfg-openai-key'),geminiKey:g('cfg-gemini-key'),claudeModel:document.getElementById('cfg-claude-model').value,gptModel:document.getElementById('cfg-gpt-model').value,geminiModel:document.getElementById('cfg-gemini-model').value,token:g('cfg-token'),pageId:g('cfg-page-id'),workerUrl:g('cfg-worker-url')};
+  // pageId: URL 전체가 들어와도 ID만 추출
+  let rawPageId=g('cfg-page-id');
+  const idMatch=rawPageId.match(/[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/i);
+  if(idMatch){rawPageId=idMatch[0];}
+  if(/^[0-9a-f]{32}$/i.test(rawPageId)){rawPageId=rawPageId.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5');}
+  const cfg={claudeKey:g('cfg-claude-key'),openaiKey:g('cfg-openai-key'),geminiKey:g('cfg-gemini-key'),claudeModel:document.getElementById('cfg-claude-model').value,gptModel:document.getElementById('cfg-gpt-model').value,geminiModel:document.getElementById('cfg-gemini-model').value,token:g('cfg-token'),pageId:rawPageId,workerUrl:g('cfg-worker-url')||DEFAULT_CFG.workerUrl};
   localStorage.setItem('ccv2_cfg',JSON.stringify(cfg));toast('설정 저장됨');toggleSettings();
 }
 function loadSettings(){
@@ -1428,7 +1433,7 @@ async function saveToNotion(){
   const title=(memo6.split('\n')[0].trim()||idea.slice(0,30)||'소재 '+new Date().toLocaleDateString('ko-KR')).slice(0,60);
   const makeBlocks=text=>{const chunks=[];for(let i=0;i<text.length;i+=2000)chunks.push(text.slice(i,i+2000));return chunks.map(c=>({object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:c}}]}}));};
   const children=[{object:'block',type:'heading_2',heading_2:{rich_text:[{type:'text',text:{content:'선택된 기획 방향'}}]}},...makeBlocks(idea),{object:'block',type:'heading_2',heading_2:{rich_text:[{type:'text',text:{content:'최종 시놉시스'}}]}},...makeBlocks(finalSyn),...(memo6?[{object:'block',type:'heading_2',heading_2:{rich_text:[{type:'text',text:{content:'메모'}}]}},...makeBlocks(memo6)]:[])];
-  try{toast('노션 저장 중...',5000);const res=await fetch(workerUrl+'/pages',{method:'POST',headers:{'Content-Type':'application/json','X-Notion-Key':token},body:JSON.stringify({parent:{page_id:pageId},properties:{title:{title:[{text:{content:title}}]}},children})});if(res.ok)toast('노션 저장 완료');else{const err=await res.text();toast('저장 실패: '+err.slice(0,80));}}catch(e){toast('저장 오류: '+e.message);}
+  try{toast('노션 저장 중...',5000);const res=await fetch(workerUrl+'/v1/pages',{method:'POST',headers:{'Content-Type':'application/json','X-Notion-Key':token},body:JSON.stringify({parent:{page_id:pageId},properties:{title:{title:[{text:{content:title}}]}},children})});if(res.ok)toast('노션 저장 완료');else{const err=await res.text();toast('저장 실패: '+err.slice(0,80));}}catch(e){toast('저장 오류: '+e.message);}
 }
 
 /* ========== 초�
