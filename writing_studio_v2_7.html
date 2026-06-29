@@ -1723,16 +1723,13 @@ async function searchResearchResults(){
   statusEl.textContent='검색 중…'; resultsEl.innerHTML='';
   const dbId='1262f7115d4b4f2b9003496956c5b9bf';
   const filter = query ? {
-    or:[
-      {property:'프로젝트명',rich_text:{contains:query}},
-      {property:'축이름',rich_text:{contains:query}}
-    ]
+    property:'제목', title:{contains:query}
   } : {};
   try{
     const res = await fetch(`${proxy}/v1/databases/${dbId}/query`,{
       method:'POST',
       headers:{'X-Notion-Key':token,'Content-Type':'application/json'},
-      body: JSON.stringify({filter: query?filter:{}, page_size:30, sorts:[{property:'저장일',direction:'descending'}]})
+      body: JSON.stringify({filter: query?filter:undefined, page_size:30})
     });
     if(!res.ok){const e=await res.json().catch(()=>({}));statusEl.textContent='오류: '+(e.message||res.status);return;}
     const data=await res.json();
@@ -1742,25 +1739,24 @@ async function searchResearchResults(){
     items.forEach(page=>{
       const props=page.properties||{};
       const title=(props['제목']?.title||[]).map(t=>t.plain_text).join('')||'(제목 없음)';
-      const proj=(props['프로젝트명']?.rich_text||[]).map(t=>t.plain_text).join('')||'-';
-      const axis=(props['축이름']?.rich_text||[]).map(t=>t.plain_text).join('')||'-';
-      const ai=(props['AI']?.select?.name)||'-';
-      const star=props['별점']?.number||0;
+      const purpose=(props['목적']?.rich_text||[]).map(t=>t.plain_text).join('')||'-';
+      const ai=(props['배정AI']?.select?.name)||'-';
+      const cnt=props['결과수']?.number||0;
       const pageId=page.id;
       const div=document.createElement('div');
       div.style.cssText='background:#2a2721;border:1px solid #3a3530;border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .15s';
       div.innerHTML=`
         <div style="font-size:13px;font-weight:600;color:#e8e0d0;margin-bottom:4px">${esc2(title)}</div>
-        <div style="font-size:11px;color:#888">${esc2(proj)} · ${esc2(axis)} · ${ai}${ star?` · ★${star}`:''}</div>`;
+        <div style="font-size:11px;color:#888">${esc2(purpose)} · ${ai}${cnt?` · ${cnt}건`:''}</div>`;
       div.onmouseover=()=>div.style.borderColor='#c8a96e';
       div.onmouseout=()=>div.style.borderColor='#3a3530';
-      div.onclick=()=>importResearchPage(pageId, title, proj, axis, ai, div);
+      div.onclick=()=>importResearchPage(pageId, title, purpose, ai, div);
       resultsEl.appendChild(div);
     });
   }catch(e){statusEl.textContent='네트워크 오류: '+e.message;}
 }
 
-async function importResearchPage(pageId, title, proj, axis, ai, divEl){
+async function importResearchPage(pageId, title, purpose, ai, divEl){
   const token=wsNotion.token; const proxy=wsNotion.proxy;
   const statusEl=document.getElementById('ri-status');
   statusEl.textContent='본문 불러오는 중…';
@@ -1778,9 +1774,9 @@ async function importResearchPage(pageId, title, proj, axis, ai, divEl){
     }).filter(Boolean).join('\n\n');
     const r={
       id:uid(),
-      title:`[리서치] ${proj} · ${axis} (${ai})`,
+      title:`[리서치] ${title} (${ai})`,
       body:content||'(본문 없음)',
-      memo:`출처: 리서치 결과 DB | ${title}`
+      memo:`출처: 리서치 결과 DB | ${purpose}`
     };
     state.resources.push(r);
     state.currentResourceId=r.id;
