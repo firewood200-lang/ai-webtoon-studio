@@ -1107,13 +1107,13 @@ function initDragDrop() {
   });
 }
 
-load();
-loadMemo();
-
 // ── 메모 ──
 const MEMO_KEY = 'launcher_memo_v1';
 let memoIsRead = false;
 let memoTimer = null;
+
+load();
+loadMemo();
 
 function loadMemo() {
   const data = JSON.parse(localStorage.getItem(MEMO_KEY) || '{"text":"","savedAt":""}');
