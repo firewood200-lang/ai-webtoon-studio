@@ -457,6 +457,101 @@
     left: 19px;
   }
 
+  /* ── 탭 ── */
+  .tab-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    background: var(--surface);
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: all .15s;
+    margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* ── 메모 ── */
+  .memo-wrap {
+    padding: 28px;
+    max-width: 860px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: calc(100vh - 108px);
+  }
+  .memo-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .memo-toolbar-left {
+    flex: 1;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .memo-toolbar-left span { color: var(--accent); }
+  .memo-textarea {
+    width: 100%;
+    flex: 1;
+    min-height: calc(100vh - 200px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;
+    line-height: 1.8;
+    padding: 20px;
+    outline: none;
+    resize: none;
+    transition: border-color .15s;
+  }
+  .memo-textarea:focus { border-color: var(--accent-dim); }
+  .memo-textarea::placeholder { color: var(--text-dim); }
+  .memo-read {
+    display: none;
+    width: 100%;
+    min-height: calc(100vh - 200px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;
+    line-height: 1.8;
+    padding: 20px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    cursor: pointer;
+  }
+  .memo-read.active { display: block; }
+  .memo-read h1,.memo-read h2,.memo-read h3 {
+    color: var(--accent); font-weight:700; margin:12px 0 4px;
+  }
+  .memo-read h1{font-size:18px;}
+  .memo-read h2{font-size:16px;}
+  .memo-read h3{font-size:14px;}
+  .memo-read strong { color: var(--text); font-weight:700; }
+  .memo-read em { color: var(--text-mid); font-style:italic; }
+  .memo-read hr { border:none; border-top:1px solid var(--border); margin:12px 0; }
+  .memo-read-hint {
+    font-size:11px; color:var(--text-dim); text-align:center; margin-top:10px;
+  }
+
   /* 드래그 앤 드롭 */
   .app-card[draggable="true"] { cursor: default; }
   .app-card.dragging { opacity: 0.35; border-style: dashed; }
@@ -554,6 +649,15 @@
   </div>
 </div>
 
+<!-- 탭 네비게이션 -->
+<div class="tab-nav">
+  <button class="tab-btn active" id="tabBtnApps" onclick="switchTab('apps')">앱 목록</button>
+  <button class="tab-btn" id="tabBtnMemo" onclick="switchTab('memo')">📝 메모</button>
+</div>
+
+<!-- 앱 목록 탭 -->
+<div class="tab-pane active" id="tabApps">
+
 <div class="pipeline">
   <div class="pipeline-title">시나리오 집필 파이프라인</div>
   <div class="pipeline-steps">
@@ -614,6 +718,22 @@
 <div class="main">
   <div class="section-label">앱 목록</div>
   <div class="app-grid" id="appGrid"></div>
+</div>
+
+</div><!-- /tabApps -->
+
+<!-- 메모 탭 -->
+<div class="tab-pane" id="tabMemo">
+  <div class="memo-wrap">
+    <div class="memo-toolbar">
+      <div class="memo-toolbar-left">임시저장 <span id="memoSavedAt">—</span></div>
+      <button class="btn" id="memoModeBtn" onclick="toggleMemoMode()">읽기 모드</button>
+      <button class="btn btn-primary" onclick="saveMemo()">저장</button>
+    </div>
+    <textarea class="memo-textarea" id="memoTextarea" placeholder="작업 메모, 아이디어, 할 일 등을 자유롭게 적으세요.&#10;&#10;# 제목은 # 으로&#10;**굵게**, *기울임*, --- 구분선 지원" oninput="onMemoInput()"></textarea>
+    <div class="memo-read" id="memoRead" onclick="switchMemoToEdit()"></div>
+    <div class="memo-read-hint" id="memoReadHint" style="display:none;">클릭하면 편집 모드로 전환됩니다</div>
+  </div>
 </div>
 
 <!-- 앱 추가/수정 모달 -->
@@ -979,6 +1099,99 @@ function initDragDrop() {
 }
 
 load();
+
+// ── 탭 전환 ──
+function switchTab(name) {
+  ['apps','memo'].forEach(t => {
+    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1))?.classList.toggle('active', t === name);
+    document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1))?.classList.toggle('active', t === name);
+  });
+  if (name === 'memo') loadMemo();
+}
+
+// ── 메모 ──
+const MEMO_KEY = 'launcher_memo_v1';
+let memoIsRead = false;
+let memoTimer = null;
+
+function loadMemo() {
+  const data = JSON.parse(localStorage.getItem(MEMO_KEY) || '{"text":"","savedAt":""}');
+  document.getElementById('memoTextarea').value = data.text || '';
+  if (data.savedAt) {
+    document.getElementById('memoSavedAt').textContent = fmtMemoDate(data.savedAt);
+  }
+}
+
+function saveMemo(silent) {
+  const text = document.getElementById('memoTextarea').value;
+  const savedAt = new Date().toISOString();
+  localStorage.setItem(MEMO_KEY, JSON.stringify({ text, savedAt }));
+  document.getElementById('memoSavedAt').textContent = fmtMemoDate(savedAt);
+  if (!silent) showToast('메모 저장됨 ✓');
+}
+
+function onMemoInput() {
+  clearTimeout(memoTimer);
+  memoTimer = setTimeout(() => saveMemo(true), 1500);
+}
+
+function toggleMemoMode() {
+  memoIsRead = !memoIsRead;
+  const ta = document.getElementById('memoTextarea');
+  const rd = document.getElementById('memoRead');
+  const hint = document.getElementById('memoReadHint');
+  const btn = document.getElementById('memoModeBtn');
+  if (memoIsRead) {
+    saveMemo(true);
+    rd.innerHTML = renderMemoMarkdown(ta.value);
+    rd.classList.add('active');
+    ta.style.display = 'none';
+    hint.style.display = 'block';
+    btn.textContent = '편집 모드';
+  } else {
+    rd.classList.remove('active');
+    ta.style.display = '';
+    hint.style.display = 'none';
+    btn.textContent = '읽기 모드';
+    ta.focus();
+  }
+}
+
+function switchMemoToEdit() {
+  if (!memoIsRead) return;
+  memoIsRead = false;
+  const ta = document.getElementById('memoTextarea');
+  const rd = document.getElementById('memoRead');
+  const hint = document.getElementById('memoReadHint');
+  rd.classList.remove('active');
+  ta.style.display = '';
+  hint.style.display = 'none';
+  document.getElementById('memoModeBtn').textContent = '읽기 모드';
+  ta.focus();
+}
+
+function renderMemoMarkdown(text) {
+  if (!text.trim()) return '<span style="color:var(--text-dim)">내용 없음</span>';
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/^---$/gm,'<hr>')
+    .replace(/\n/g,'<br>');
+}
+
+function fmtMemoDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso), now = new Date();
+  const diff = Math.floor((now - d) / 60000);
+  if (diff < 1) return '방금';
+  if (diff < 60) return diff + '분 전';
+  if (diff < 1440) return Math.floor(diff/60) + '시간 전';
+  return d.toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'}) + ' ' + d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+}
 </script>
 
 <!-- ── 오류 로그 패널 ── -->

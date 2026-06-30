@@ -75,6 +75,37 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, 'N
 .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
 
 /* 구분선 */
+/* ── 상단 정보 바 ── */
+#top-bar { position: fixed; top: 0; left: 0; right: 0; height: 36px; z-index: 150; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 12px; gap: 8px; }
+#top-bar .tb-title { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; flex: 1; }
+#top-bar .tb-last { font-size: 10px; color: var(--text3); }
+#top-bar .tb-last span { color: var(--text2); }
+#top-bar button { background: none; border: 1px solid var(--border); color: var(--text3); border-radius: 8px; padding: 3px 10px; font-size: 11px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+#top-bar button:hover { border-color: var(--accent); color: var(--accent); }
+#top-bar .tb-exit { border-color: transparent; }
+#top-bar .tb-exit:hover { border-color: var(--danger); color: var(--danger); }
+#content { padding-top: 36px; }
+
+/* ── 종료 / AI 공통 모달 ── */
+.cmn-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 300; display: none; align-items: center; justify-content: center; }
+.cmn-modal-overlay.open { display: flex; }
+.cmn-modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 420px; max-width: calc(100vw - 32px); max-height: 85vh; overflow-y: auto; }
+.cmn-modal-title { font-size: 16px; font-weight: 700; margin-bottom: 18px; }
+.cmn-modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+/* exit checklist */
+.exit-checklist { display: flex; flex-direction: column; gap: 10px; }
+.exit-chk-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; font-size: 14px; transition: border-color 0.15s; }
+.exit-chk-row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }
+.exit-chk-row.checked { border-color: var(--success); background: rgba(52,211,153,0.07); }
+/* AI modal */
+.ai-eng-step { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.ai-eng-step:last-child { border-bottom: none; }
+.ai-eng-label { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 8px; letter-spacing: 0.06em; text-transform: uppercase; }
+.ai-eng-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ai-eng-btn { flex-shrink: 0; padding: 6px 14px; border: 1.5px solid var(--border); border-radius: 20px; background: none; color: var(--text2); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.ai-eng-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ai-eng-sel { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; }
+
 .divider { height: 1px; background: var(--border); margin: 14px 0; }
 
 /* 토스트 */
@@ -183,6 +214,42 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, 'N
 </style>
 </head>
 <body>
+<div id="top-bar">
+  <div class="tb-title">리서치 워크플로우</div>
+  <div class="tb-last">마지막 사용 <span id="lastUsedBadge">처음 실행</span></div>
+  <button onclick="openAiEngineModal()">⚡ AI 엔진</button>
+  <button class="tb-exit" onclick="openExitModal()">✕ 종료</button>
+</div>
+
+<!-- 종료 체크리스트 모달 -->
+<div class="cmn-modal-overlay" id="exit-modal">
+  <div class="cmn-modal">
+    <div class="cmn-modal-title">⚠ 종료 전 확인</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">완료된 항목에 체크하세요.</p>
+    <div class="exit-checklist">
+      <label class="exit-chk-row" id="echk-json"><input type="checkbox" onchange="syncExitChk(this,'echk-json')"> <span>JSON 저장 완료</span></label>
+      <label class="exit-chk-row" id="echk-content"><input type="checkbox" onchange="syncExitChk(this,'echk-content')"> <span>노션 작업내용 업로드</span></label>
+      <label class="exit-chk-row" id="echk-db"><input type="checkbox" onchange="syncExitChk(this,'echk-db')"> <span>노션 DB 업로드</span></label>
+      <label class="exit-chk-row" id="echk-log"><input type="checkbox" onchange="syncExitChk(this,'echk-log')"> <span>작업일지 업로드</span></label>
+    </div>
+    <div class="cmn-modal-footer">
+      <button class="btn btn-secondary" onclick="closeExitModal()">취소</button>
+      <button class="btn btn-danger" onclick="confirmExit()">종료</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI 엔진 선택 모달 -->
+<div class="cmn-modal-overlay" id="ai-engine-modal">
+  <div class="cmn-modal">
+    <div class="cmn-modal-title">⚡ AI 엔진 설정</div>
+    <div id="ai-engine-modal-body"></div>
+    <div class="cmn-modal-footer">
+      <button class="btn btn-secondary" onclick="closeAiEngineModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <div id="app">
   <div id="content"></div>
   <button id="settings-fab" onclick="openSettings()" title="설정">⚙️</button>
@@ -1627,6 +1694,76 @@ function esc(str) {
 load();
 applySettings();
 render();
+initLastUsed('rwf');
+
+// ── 마지막 사용 ──
+function initLastUsed(appKey) {
+  const key = 'lastUsed_' + appKey;
+  const prev = localStorage.getItem(key);
+  const el = document.getElementById('lastUsedBadge');
+  if (el && prev) el.textContent = fmtLastUsed(prev);
+  localStorage.setItem(key, new Date().toISOString());
+}
+function fmtLastUsed(iso) {
+  const d = new Date(iso), now = new Date();
+  const diff = Math.floor((now - d) / 60000);
+  if (diff < 1) return '방금 전';
+  if (diff < 60) return diff + '분 전';
+  const h = Math.floor(diff / 60);
+  if (h < 24) return h + '시간 전';
+  const days = Math.floor(h / 24);
+  if (days === 1) return '어제';
+  if (days < 7) return days + '일 전';
+  return d.toLocaleDateString('ko-KR', {month:'numeric', day:'numeric'});
+}
+
+// ── 종료 체크리스트 ──
+function openExitModal() {
+  ['echk-json','echk-content','echk-db','echk-log'].forEach(id => {
+    const row = document.getElementById(id);
+    if (!row) return;
+    row.querySelector('input').checked = false;
+    row.classList.remove('checked');
+  });
+  document.getElementById('exit-modal').classList.add('open');
+}
+function closeExitModal() { document.getElementById('exit-modal').classList.remove('open'); }
+function syncExitChk(cb, rowId) { document.getElementById(rowId)?.classList.toggle('checked', cb.checked); }
+function confirmExit() { closeExitModal(); window.close(); setTimeout(() => toast('탭을 직접 닫아주세요'), 300); }
+window.addEventListener('beforeunload', e => { e.preventDefault(); e.returnValue = ''; });
+
+// ── AI 엔진 선택 모달 ──
+const RWF_AI_MODELS = {
+  gpt: ['gpt-4o','gpt-4o-mini','gpt-4.1'],
+  gemini: ['gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash'],
+  claude: ['claude-sonnet-4-6','claude-opus-4-8','claude-haiku-4-5-20251001']
+};
+function openAiEngineModal() {
+  const s = state.settings;
+  const body = document.getElementById('ai-engine-modal-body');
+  const rows = [
+    { key: 'gpt',    label: 'GPT',    modelKey: 'gptModel',    providers: ['gpt','gemini','claude'] },
+    { key: 'gemini', label: 'Gemini', modelKey: 'geminiModel', providers: ['gpt','gemini','claude'] },
+    { key: 'claude', label: 'Claude', modelKey: 'claudeModel', providers: ['gpt','gemini','claude'] },
+  ];
+  // research_v3는 provider별 독립 모델 설정 구조 — 각각 모델만 선택
+  body.innerHTML = rows.map(r => {
+    const cur = s[r.modelKey] || RWF_AI_MODELS[r.key][0];
+    const opts = RWF_AI_MODELS[r.key].map(m => `<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
+    return `<div class="ai-eng-step">
+      <div class="ai-eng-label">${r.label} 모델</div>
+      <div class="ai-eng-row">
+        <select class="ai-eng-sel" onchange="rwfSetModel('${r.modelKey}',this.value)">${opts}</select>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('ai-engine-modal').classList.add('open');
+}
+function closeAiEngineModal() { document.getElementById('ai-engine-modal').classList.remove('open'); }
+function rwfSetModel(modelKey, value) {
+  state.settings[modelKey] = value;
+  save();
+}
 </script>
 
 <!-- ── 오류 로그 패널 ── -->

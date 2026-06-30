@@ -441,11 +441,46 @@ body {
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── 마지막 사용 배지 ── */
+.last-used-badge {
+  font-size: 10px; color: var(--text-dim);
+  display: flex; flex-direction: column; line-height: 1.2;
+  flex-shrink: 0; border-right: 1px solid var(--border); padding-right: 10px; margin-right: 2px;
+}
+.last-used-badge .lub-label { font-size: 9px; color: var(--text-dim); opacity: 0.6; letter-spacing: 0.05em; }
+.last-used-badge .lub-time { color: var(--text-mid); }
+
+/* ── 종료 / AI 버튼 ── */
+.hbtn-exit { border-color: transparent; }
+.hbtn-exit:hover { border-color: var(--danger); color: #c05050; }
+
+/* ── 종료 체크리스트 모달 ── */
+.exit-checklist { display: flex; flex-direction: column; gap: 10px; }
+.exit-chk-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius);
+  border: 1px solid var(--border); cursor: pointer;
+  font-size: 13px; transition: border-color 0.15s;
+}
+.exit-chk-row:hover { border-color: var(--accent-dim); }
+.exit-chk-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; }
+.exit-chk-row.checked { border-color: var(--step-done); background: rgba(74,122,90,0.07); }
+
+/* ── AI 엔진 모달 ── */
+.ai-modal-step { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.ai-modal-step:last-child { border-bottom: none; }
+.ai-modal-step-label { font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 0.08em; margin-bottom: 8px; text-transform: uppercase; }
+.ai-modal-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
 
 <div class="header">
+  <div class="last-used-badge">
+    <span class="lub-label">마지막 사용</span>
+    <span class="lub-time" id="lastUsedBadge">처음 실행</span>
+  </div>
   <span class="header-title">작가실</span>
   <span class="header-sub" id="header-sub">언노운 리포트 — 멀티 에이전트</span>
   <div class="header-btns">
@@ -453,8 +488,10 @@ body {
       <button onclick="setLayout('single')" id="lt-single" class="active">단일</button>
       <button onclick="setLayout('split')" id="lt-split">분할</button>
     </div>
+    <button class="hbtn" onclick="openAiModal()">⚡ AI 엔진</button>
     <button class="hbtn" onclick="openSettings()">⚙ 지침</button>
     <button class="hbtn" id="admin-btn" onclick="openAdmin()">🔧 관리자</button>
+    <button class="hbtn hbtn-exit" onclick="openExitModal()">✕ 종료</button>
   </div>
 </div>
 
@@ -917,6 +954,44 @@ body {
   </div>
 </div>
 
+<!-- AI 엔진 선택 모달 -->
+<div class="modal-overlay" id="ai-engine-modal" onclick="if(event.target===this)closeAiModal()">
+  <div class="modal" style="width:520px;max-width:calc(100vw - 40px);">
+    <div class="modal-header">
+      <span class="modal-title">⚡ AI 엔진 설정</span>
+      <button class="modal-close" onclick="closeAiModal()">✕</button>
+    </div>
+    <div style="padding:0 20px 4px;overflow-y:auto;max-height:70vh;">
+      <div id="ai-modal-steps"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAiModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 종료 체크리스트 모달 -->
+<div class="modal-overlay" id="exit-modal">
+  <div class="modal" style="width:400px;max-width:calc(100vw - 40px);">
+    <div class="modal-header">
+      <span class="modal-title">⚠ 종료 전 확인</span>
+    </div>
+    <div style="padding:20px;">
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">완료된 항목에 체크하세요.</p>
+      <div class="exit-checklist">
+        <label class="exit-chk-row" id="echk-json"><input type="checkbox" onchange="syncExitChk(this,'echk-json')"> <span>JSON 저장 완료</span></label>
+        <label class="exit-chk-row" id="echk-content"><input type="checkbox" onchange="syncExitChk(this,'echk-content')"> <span>노션 작업내용 업로드</span></label>
+        <label class="exit-chk-row" id="echk-db"><input type="checkbox" onchange="syncExitChk(this,'echk-db')"> <span>노션 DB 업로드</span></label>
+        <label class="exit-chk-row" id="echk-log"><input type="checkbox" onchange="syncExitChk(this,'echk-log')"> <span>작업일지 업로드</span></label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeExitModal()">취소</button>
+      <button class="btn btn-danger" onclick="confirmExit()">종료</button>
+    </div>
+  </div>
+</div>
+
 <!-- 관리자 모달 -->
 <div class="modal-overlay" id="admin-modal" onclick="if(event.target===this)closeAdmin()">
   <div class="admin-modal">
@@ -959,7 +1034,7 @@ body {
               </div>
               <div class="engine-provider-group"><span class="engine-provider-label">Claude</span>
                 <button class="engine-btn" data-model="claude-sonnet-4-6" onclick="selectEngine('gemini',this)">Sonnet 4.6</button>
-                <button class="engine-btn" data-model="claude-opus-4-6" onclick="selectEngine('gemini',this)">Opus 4.6</button>
+                <button class="engine-btn" data-model="claude-opus-4-8" onclick="selectEngine('gemini',this)">Opus 4.6</button>
                 <button class="engine-btn" data-model="claude-haiku-4-5-20251001" onclick="selectEngine('gemini',this)">Haiku 4.5</button>
               </div>
             </div>
@@ -979,7 +1054,7 @@ body {
               </div>
               <div class="engine-provider-group"><span class="engine-provider-label">Claude</span>
                 <button class="engine-btn" data-model="claude-sonnet-4-6" onclick="selectEngine('gpt',this)">Sonnet 4.6</button>
-                <button class="engine-btn" data-model="claude-opus-4-6" onclick="selectEngine('gpt',this)">Opus 4.6</button>
+                <button class="engine-btn" data-model="claude-opus-4-8" onclick="selectEngine('gpt',this)">Opus 4.6</button>
                 <button class="engine-btn" data-model="claude-haiku-4-5-20251001" onclick="selectEngine('gpt',this)">Haiku 4.5</button>
               </div>
             </div>
@@ -999,7 +1074,7 @@ body {
               </div>
               <div class="engine-provider-group"><span class="engine-provider-label">Claude</span>
                 <button class="engine-btn selected" data-model="claude-sonnet-4-6" onclick="selectEngine('claude',this)">Sonnet 4.6</button>
-                <button class="engine-btn" data-model="claude-opus-4-6" onclick="selectEngine('claude',this)">Opus 4.6</button>
+                <button class="engine-btn" data-model="claude-opus-4-8" onclick="selectEngine('claude',this)">Opus 4.6</button>
                 <button class="engine-btn" data-model="claude-haiku-4-5-20251001" onclick="selectEngine('claude',this)">Haiku 4.5</button>
               </div>
             </div>
@@ -1019,7 +1094,7 @@ body {
               </div>
               <div class="engine-provider-group"><span class="engine-provider-label">Claude</span>
                 <button class="engine-btn" data-model="claude-sonnet-4-6" onclick="selectEngine('review',this)">Sonnet 4.6</button>
-                <button class="engine-btn" data-model="claude-opus-4-6" onclick="selectEngine('review',this)">Opus 4.6</button>
+                <button class="engine-btn" data-model="claude-opus-4-8" onclick="selectEngine('review',this)">Opus 4.6</button>
                 <button class="engine-btn" data-model="claude-haiku-4-5-20251001" onclick="selectEngine('review',this)">Haiku 4.5</button>
               </div>
             </div>
@@ -1039,7 +1114,7 @@ body {
               </div>
               <div class="engine-provider-group"><span class="engine-provider-label">Claude</span>
                 <button class="engine-btn selected" data-model="claude-sonnet-4-6" onclick="selectEngine('rewrite',this)">Sonnet 4.6</button>
-                <button class="engine-btn" data-model="claude-opus-4-6" onclick="selectEngine('rewrite',this)">Opus 4.6</button>
+                <button class="engine-btn" data-model="claude-opus-4-8" onclick="selectEngine('rewrite',this)">Opus 4.6</button>
                 <button class="engine-btn" data-model="claude-haiku-4-5-20251001" onclick="selectEngine('rewrite',this)">Haiku 4.5</button>
               </div>
             </div>
@@ -1833,7 +1908,116 @@ function handleLoad(e){
   reader.readAsText(file);e.target.value='';
 }
 
-window.addEventListener('DOMContentLoaded',()=>goStep(0));
+window.addEventListener('DOMContentLoaded',()=>{
+  goStep(0);
+  initLastUsed('wr');
+  initAiModal();
+});
+
+// ════════════════════════
+// 마지막 사용 기록 & 표시
+// ════════════════════════
+function initLastUsed(appKey) {
+  const key = 'lastUsed_' + appKey;
+  const prev = localStorage.getItem(key);
+  const el = document.getElementById('lastUsedBadge');
+  if (el && prev) el.textContent = fmtLastUsed(prev);
+  localStorage.setItem(key, new Date().toISOString());
+}
+function fmtLastUsed(iso) {
+  const d = new Date(iso), now = new Date();
+  const diff = Math.floor((now - d) / 60000);
+  if (diff < 1) return '방금 전';
+  if (diff < 60) return diff + '분 전';
+  const h = Math.floor(diff / 60);
+  if (h < 24) return h + '시간 전';
+  const days = Math.floor(h / 24);
+  if (days === 1) return '어제';
+  if (days < 7) return days + '일 전';
+  return d.toLocaleDateString('ko-KR', {month:'numeric', day:'numeric'});
+}
+
+// ════════════════════════
+// 종료 체크리스트
+// ════════════════════════
+function openExitModal() {
+  // 체크박스 초기화
+  ['echk-json','echk-content','echk-db','echk-log'].forEach(id => {
+    const row = document.getElementById(id);
+    if (!row) return;
+    row.querySelector('input').checked = false;
+    row.classList.remove('checked');
+  });
+  document.getElementById('exit-modal').classList.add('open');
+}
+function closeExitModal() {
+  document.getElementById('exit-modal').classList.remove('open');
+}
+function syncExitChk(cb, rowId) {
+  const row = document.getElementById(rowId);
+  if (row) row.classList.toggle('checked', cb.checked);
+}
+function confirmExit() {
+  closeExitModal();
+  window.close();
+  // window.close()가 막힐 경우 안내
+  setTimeout(() => showToast('탭을 직접 닫아주세요'), 300);
+}
+window.addEventListener('beforeunload', e => {
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+// ════════════════════════
+// AI 엔진 선택 모달
+// ════════════════════════
+const AI_STEP_LABELS = {
+  step1: 'STEP 1→2  자료수집',
+  step2: 'STEP 2→3  서사보강',
+  step3: 'STEP 3→4  초고집필',
+  step4: 'STEP 4→5  검수',
+  step5: 'STEP 5→6  재집필',
+};
+const AI_PROVIDER_LABELS = { gemini: 'Gemini', gpt: 'GPT', claude: 'Claude' };
+
+function initAiModal() { /* noop — rendered on open */ }
+
+function openAiModal() {
+  const container = document.getElementById('ai-modal-steps');
+  let html = '';
+  ['step1','step2','step3','step4','step5'].forEach(sk => {
+    const eng = stepEngines[sk];
+    const modelOpts = (MODELS[eng.ai] || []).map(m =>
+      `<option value="${m}" ${m===eng.model?'selected':''}>${m}</option>`
+    ).join('');
+    const provBtns = ['gemini','gpt','claude'].map(ai =>
+      `<button class="ai-sel-btn sel-${ai} ${eng.ai===ai?'active':''}"
+        onclick="aiModalSetProvider('${sk}','${ai}',this)">${AI_PROVIDER_LABELS[ai]}</button>`
+    ).join('');
+    html += `<div class="ai-modal-step">
+      <div class="ai-modal-step-label">${AI_STEP_LABELS[sk]}</div>
+      <div class="ai-modal-row">
+        <div class="ai-sel-btns">${provBtns}</div>
+        <select class="model-sel" id="ams-${sk}" onchange="setStepModel('${sk}',this.value)">${modelOpts}</select>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+  document.getElementById('ai-engine-modal').classList.add('open');
+}
+function closeAiModal() {
+  document.getElementById('ai-engine-modal').classList.remove('open');
+}
+function aiModalSetProvider(stepKey, ai, btn) {
+  stepEngines[stepKey].ai = ai;
+  stepEngines[stepKey].model = MODELS[ai][0];
+  btn.closest('.ai-sel-btns').querySelectorAll('.ai-sel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const sel = document.getElementById('ams-' + stepKey);
+  if (sel) sel.innerHTML = MODELS[ai].map(m => `<option value="${m}">${m}</option>`).join('');
+  saveStepEngines();
+  renderModelSel(stepKey); // 스텝 탭 내 드롭다운도 동기화
+}
 </script>
 
 <!-- ── 오류 로그 패널 ── -->

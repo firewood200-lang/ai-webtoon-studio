@@ -142,6 +142,32 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
 .slot-card.drag-over{border-style:solid!important;border-color:var(--accent2)!important;background:rgba(74,111,255,.12);}
 .slot-card.drag-over .slot-preview{opacity:.7;}
 
+/* ── 마지막 사용 / 헤더 추가 ── */
+.header-left-info{display:flex;flex-direction:column;line-height:1.2;}
+.header-last{font-size:9px;color:var(--text3);margin-top:1px;}
+.header-last span{color:var(--text2);}
+.header-btns-right{display:flex;gap:6px;align-items:center;flex-shrink:0;}
+.hbtn-sm{background:none;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
+.hbtn-sm:hover{border-color:var(--accent);color:var(--accent2);}
+.hbtn-exit{border-color:transparent;}
+.hbtn-exit:hover{border-color:var(--err);color:var(--err);}
+
+/* ── 종료 / AI 공통 모달 ── */
+.cmn-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:none;align-items:center;justify-content:center;}
+.cmn-overlay.open{display:flex;}
+.cmn-box{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:24px;width:400px;max-width:calc(100vw - 32px);max-height:85vh;overflow-y:auto;}
+.cmn-title{font-size:15px;font-weight:700;margin-bottom:16px;}
+.cmn-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);}
+.cmn-footer button{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 16px;font-size:13px;cursor:pointer;font-family:inherit;}
+.cmn-footer .btn-danger{background:#a04040;border-color:#a04040;color:#fff;}
+.exit-chk-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);cursor:pointer;font-size:13px;margin-bottom:8px;transition:border-color .15s;}
+.exit-chk-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);flex-shrink:0;}
+.exit-chk-row.checked{border-color:var(--ok);background:rgba(51,170,85,.08);}
+.ai-eng-step{padding:12px 0;border-bottom:1px solid var(--border);}
+.ai-eng-step:last-child{border-bottom:none;}
+.ai-eng-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent2);margin-bottom:8px;}
+.ai-eng-sel{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;font-family:inherit;outline:none;}
+
 /* ── 실행 버튼 스피너 ── */
 @keyframes spin{to{transform:rotate(360deg);}}
 .btn-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px;}
@@ -253,13 +279,44 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
 </head>
 <body>
 
+<!-- 종료 체크리스트 모달 -->
+<div class="cmn-overlay" id="exit-modal">
+  <div class="cmn-box">
+    <div class="cmn-title">⚠ 종료 전 확인</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">완료된 항목에 체크하세요.</p>
+    <label class="exit-chk-row" id="echk-json"><input type="checkbox" onchange="syncExitChk(this,'echk-json')"> <span>JSON 저장 완료</span></label>
+    <label class="exit-chk-row" id="echk-content"><input type="checkbox" onchange="syncExitChk(this,'echk-content')"> <span>노션 작업내용 업로드</span></label>
+    <label class="exit-chk-row" id="echk-db"><input type="checkbox" onchange="syncExitChk(this,'echk-db')"> <span>노션 DB 업로드</span></label>
+    <label class="exit-chk-row" id="echk-log"><input type="checkbox" onchange="syncExitChk(this,'echk-log')"> <span>작업일지 업로드</span></label>
+    <div class="cmn-footer">
+      <button onclick="closeExitModal()">취소</button>
+      <button class="btn-danger" onclick="confirmExit()">종료</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI 엔진 선택 모달 -->
+<div class="cmn-overlay" id="ai-engine-modal">
+  <div class="cmn-box">
+    <div class="cmn-title">⚡ AI 모델 선택</div>
+    <div id="ai-engine-body"></div>
+    <div class="cmn-footer">
+      <button onclick="closeAiEngineModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── 헤더 (공통) ── -->
 <div class="header">
-  <div>
+  <div class="header-left-info">
     <div class="header-title">AI 워크플로우</div>
-    <div class="header-process" id="headerProcess">펜터치</div>
+    <div class="header-last">마지막 사용 <span id="lastUsedBadge">처음 실행</span> · <span class="header-process" id="headerProcess">펜터치</span></div>
   </div>
-  <button class="btn-settings-open" id="btnSettingsOpen">⚙</button>
+  <div class="header-btns-right">
+    <button class="hbtn-sm" onclick="openAiEngineModal()">⚡ AI</button>
+    <button class="btn-settings-open" id="btnSettingsOpen">⚙</button>
+    <button class="hbtn-sm hbtn-exit" onclick="openExitModal()">✕ 종료</button>
+  </div>
 </div>
 
 <!-- ── 공정 탭 (공통) ── -->
@@ -1568,11 +1625,67 @@ function buildSessionSummaryBody() {
 
 // 탭 닫기/새로고침 전: 브라우저 기본 "떠나시겠습니까?" 다이얼로그
 window.addEventListener('beforeunload', (e) => {
-  if(sessionStat.runs > 0) {
-    e.preventDefault();
-    e.returnValue = '';  // Chrome 필수
-  }
+  e.preventDefault();
+  e.returnValue = '';  // Chrome 필수
 });
+
+// ── 마지막 사용 ──
+(function(){
+  const key='lastUsed_aiWf';
+  const prev=localStorage.getItem(key);
+  const el=document.getElementById('lastUsedBadge');
+  if(el&&prev){
+    const d=new Date(prev),now=new Date(),diff=Math.floor((now-d)/60000);
+    let txt;
+    if(diff<1)txt='방금 전';
+    else if(diff<60)txt=diff+'분 전';
+    else if(diff<1440)txt=Math.floor(diff/60)+'시간 전';
+    else if(diff<2880)txt='어제';
+    else txt=d.toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'});
+    el.textContent=txt;
+  }
+  localStorage.setItem(key,new Date().toISOString());
+})();
+
+// ── 종료 체크리스트 ──
+function openExitModal(){
+  ['echk-json','echk-content','echk-db','echk-log'].forEach(id=>{
+    const row=document.getElementById(id);if(!row)return;
+    row.querySelector('input').checked=false;row.classList.remove('checked');
+  });
+  document.getElementById('exit-modal').classList.add('open');
+}
+function closeExitModal(){document.getElementById('exit-modal').classList.remove('open');}
+function syncExitChk(cb,rowId){document.getElementById(rowId)?.classList.toggle('checked',cb.checked);}
+function confirmExit(){closeExitModal();window.close();setTimeout(()=>showToast('탭을 직접 닫아주세요'),300);}
+
+// ── AI 엔진 선택 모달 ──
+const AIW_MODELS=['gemini-3.1-flash-image','gemini-3.1-flash-image-preview','gemini-3-pro-image','gemini-3-pro-image-preview'];
+function openAiEngineModal(){
+  const mSel=document.getElementById('modelSelect');
+  const cur=mSel?mSel.value:AIW_MODELS[0];
+  const opts=AIW_MODELS.map(m=>`<option value="${m}"${m===cur?' selected':''}>${m.replace('gemini-','')}</option>`).join('');
+  document.getElementById('ai-engine-body').innerHTML=`
+    <div class="ai-eng-step">
+      <div class="ai-eng-label">Gemini 이미지 생성 모델</div>
+      <select class="ai-eng-sel" onchange="aiWfSetModel(this.value)">${opts}</select>
+    </div>`;
+  document.getElementById('ai-engine-modal').classList.add('open');
+}
+function closeAiEngineModal(){document.getElementById('ai-engine-modal').classList.remove('open');}
+function aiWfSetModel(value){
+  ['modelSelect','dModelSelect'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){
+      // 옵션이 없으면 추가
+      if(![...el.options].find(o=>o.value===value)){
+        el.add(new Option(value,value));
+      }
+      el.value=value;
+    }
+  });
+  showToast('모델 변경됨: '+value);
+}
 
 // 실제 종료 시: keepalive fetch로 Notion에 세션 요약 자동 전송
 window.addEventListener('pagehide', () => {

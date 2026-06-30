@@ -115,6 +115,20 @@ header input{width:190px}
 .save-menu button:hover{background:#eee7da}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#24211d;color:#fff;padding:9px 20px;border-radius:10px;font-size:14px;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
+/* ── 마지막 사용 배지 ── */
+.ws-last-used{font-size:10px;color:var(--muted);margin-left:auto;white-space:nowrap;}
+.ws-last-used span{color:var(--accent);}
+.btn-exit-ws{color:var(--danger);border-color:var(--danger);}
+.btn-exit-ws:hover{background:var(--danger);color:#fff;}
+/* ── 종료 모달 ── */
+.ws-exit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:5000;display:none;align-items:center;justify-content:center;}
+.ws-exit-overlay.open{display:flex;}
+.ws-exit-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px;width:380px;max-width:calc(100vw - 32px);box-shadow:var(--shadow);}
+.ws-exit-title{font-size:15px;font-weight:700;margin-bottom:14px;}
+.ws-exit-chk{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid var(--line);cursor:pointer;font-size:13px;margin-bottom:8px;}
+.ws-exit-chk input{width:15px;height:15px;accent-color:var(--accent);flex-shrink:0;}
+.ws-exit-chk.checked{border-color:var(--accent2);background:#f5eee2;}
+.ws-exit-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--line);padding-top:14px;}
 .copy-btn{font-size:11px;padding:3px 8px;border-radius:6px;background:#e8dece;border-color:#c9b79e;color:var(--accent);font-weight:600;cursor:pointer}
 .copy-btn:hover{background:#d9ccb8}
 .empty{height:100%;display:grid;place-items:center;color:var(--muted);text-align:center;padding:30px}
@@ -158,7 +172,25 @@ header input{width:190px}
   </div>
   <input id="searchInput" placeholder="검색" oninput="runSearch()">
   <input id="fileInput" class="hidden" type="file" accept=".json" onchange="importJSON(event)">
+  <div class="ws-last-used">마지막 사용<br><span id="lastUsedBadge">처음 실행</span></div>
+  <button class="btn-exit-ws" onclick="openExitModal()" title="종료 확인">✕ 종료</button>
 </header>
+
+<!-- 종료 체크리스트 모달 -->
+<div class="ws-exit-overlay" id="exit-modal">
+  <div class="ws-exit-box">
+    <div class="ws-exit-title">⚠ 종료 전 확인</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">완료된 항목을 체크하세요.</p>
+    <label class="ws-exit-chk" id="echk-json"><input type="checkbox" onchange="syncExitChk(this,'echk-json')"> JSON 저장 완료</label>
+    <label class="ws-exit-chk" id="echk-content"><input type="checkbox" onchange="syncExitChk(this,'echk-content')"> 노션 작업내용 업로드</label>
+    <label class="ws-exit-chk" id="echk-db"><input type="checkbox" onchange="syncExitChk(this,'echk-db')"> 노션 DB 업로드</label>
+    <label class="ws-exit-chk" id="echk-log"><input type="checkbox" onchange="syncExitChk(this,'echk-log')"> 작업일지 업로드</label>
+    <div class="ws-exit-footer">
+      <button onclick="closeExitModal()">취소</button>
+      <button class="btn-exit-ws" onclick="confirmExit()">종료</button>
+    </div>
+  </div>
+</div>
 
 <aside class="sidebar">
   <div class="card">
@@ -1869,6 +1901,44 @@ async function importResearchPage(pageId, title, dbType, dbLabel, sub, pageProps
     statusEl.textContent='가져오기 완료 ✓';
   }catch(e){statusEl.textContent='본문 오류: '+e.message;}
 }
+
+// ── 마지막 사용 ──
+(function(){
+  const key='lastUsed_ws27';
+  const prev=localStorage.getItem(key);
+  const el=document.getElementById('lastUsedBadge');
+  if(el&&prev){
+    const d=new Date(prev),now=new Date(),diff=Math.floor((now-d)/60000);
+    let txt;
+    if(diff<1)txt='방금 전';
+    else if(diff<60)txt=diff+'분 전';
+    else if(diff<1440)txt=Math.floor(diff/60)+'시간 전';
+    else if(diff<2880)txt='어제';
+    else txt=d.toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'});
+    el.textContent=txt;
+  }
+  localStorage.setItem(key,new Date().toISOString());
+})();
+
+// ── 종료 체크리스트 ──
+function openExitModal(){
+  ['echk-json','echk-content','echk-db','echk-log'].forEach(id=>{
+    const row=document.getElementById(id);if(!row)return;
+    row.querySelector('input').checked=false;row.classList.remove('checked');
+  });
+  document.getElementById('exit-modal').classList.add('open');
+}
+function closeExitModal(){document.getElementById('exit-modal').classList.remove('open');}
+function syncExitChk(cb,rowId){document.getElementById(rowId)?.classList.toggle('checked',cb.checked);}
+function confirmExit(){
+  closeExitModal();
+  window.close();
+  setTimeout(()=>{
+    const t=document.querySelector('.toast');
+    if(t){t.textContent='탭을 직접 닫아주세요';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+  },300);
+}
+window.addEventListener('beforeunload',e=>{e.preventDefault();e.returnValue='';});
 </script>
 
 <!-- ── 오류 로그 패널 ── -->
