@@ -457,99 +457,110 @@
     left: 19px;
   }
 
-  /* ── 탭 ── */
-  .tab-nav {
-    display: flex;
+  /* ── 메인 2단 레이아웃 ── */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 1fr 280px;
     gap: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 0 28px;
-    background: var(--surface);
-  }
-  .tab-btn {
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--text-dim);
-    font-size: 13px;
-    font-family: inherit;
-    padding: 10px 18px;
-    cursor: pointer;
-    transition: all .15s;
-    margin-bottom: -1px;
-  }
-  .tab-btn:hover { color: var(--text); }
-  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-pane { display: none; }
-  .tab-pane.active { display: block; }
-
-  /* ── 메모 ── */
-  .memo-wrap {
-    padding: 28px;
-    max-width: 860px;
+    align-items: start;
+    max-width: 1200px;
     margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    min-height: calc(100vh - 108px);
+    padding: 0 28px 40px;
   }
-  .memo-toolbar {
+  .main-left { min-width: 0; padding-right: 24px; }
+  .main-right { position: sticky; top: 16px; padding-top: 0; }
+
+  /* ── 포스트잇 메모 ── */
+  .postit {
+    background: #23200a;
+    border: 1px solid #4a4010;
+    border-radius: 4px 4px 4px 4px;
+    box-shadow: 3px 4px 18px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,220,50,.06);
+    position: relative;
+    margin-top: 28px;
+  }
+  .postit::before {
+    content: '';
+    position: absolute;
+    top: -6px; left: 50%; transform: translateX(-50%);
+    width: 36px; height: 12px;
+    background: #5a5020;
+    border-radius: 2px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.4);
+    z-index: 1;
+  }
+  .postit-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: 6px;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid #3a3208;
   }
-  .memo-toolbar-left {
+  .postit-title {
     flex: 1;
     font-size: 11px;
-    color: var(--text-dim);
+    font-weight: 700;
+    color: #c8b840;
+    letter-spacing: .08em;
+    text-transform: uppercase;
   }
-  .memo-toolbar-left span { color: var(--accent); }
-  .memo-textarea {
+  .postit-saved {
+    font-size: 10px;
+    color: #6a5e20;
+  }
+  .postit-btns {
+    display: flex;
+    gap: 4px;
+  }
+  .postit-btn {
+    background: none;
+    border: 1px solid #4a4010;
+    border-radius: 4px;
+    color: #8a7a30;
+    font-size: 10px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all .15s;
+  }
+  .postit-btn:hover { border-color: #c8b840; color: #c8b840; }
+  .postit-textarea {
     width: 100%;
-    flex: 1;
-    min-height: calc(100vh - 200px);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text);
-    font-size: 14px;
-    font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;
-    line-height: 1.8;
-    padding: 20px;
+    min-height: 340px;
+    background: transparent;
+    border: none;
+    color: #ddd060;
+    font-size: 13px;
+    font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',monospace;
+    line-height: 1.75;
+    padding: 14px 16px;
     outline: none;
-    resize: none;
-    transition: border-color .15s;
+    resize: vertical;
   }
-  .memo-textarea:focus { border-color: var(--accent-dim); }
-  .memo-textarea::placeholder { color: var(--text-dim); }
-  .memo-read {
+  .postit-textarea::placeholder { color: #4a4215; }
+  .postit-read {
     display: none;
-    width: 100%;
-    min-height: calc(100vh - 200px);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text);
-    font-size: 14px;
+    min-height: 340px;
+    color: #ddd060;
+    font-size: 13px;
     font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;
-    line-height: 1.8;
-    padding: 20px;
+    line-height: 1.75;
+    padding: 14px 16px;
     white-space: pre-wrap;
     word-break: break-word;
     cursor: pointer;
   }
-  .memo-read.active { display: block; }
-  .memo-read h1,.memo-read h2,.memo-read h3 {
-    color: var(--accent); font-weight:700; margin:12px 0 4px;
-  }
-  .memo-read h1{font-size:18px;}
-  .memo-read h2{font-size:16px;}
-  .memo-read h3{font-size:14px;}
-  .memo-read strong { color: var(--text); font-weight:700; }
-  .memo-read em { color: var(--text-mid); font-style:italic; }
-  .memo-read hr { border:none; border-top:1px solid var(--border); margin:12px 0; }
-  .memo-read-hint {
-    font-size:11px; color:var(--text-dim); text-align:center; margin-top:10px;
+  .postit-read.active { display: block; }
+  .postit-read h1,.postit-read h2,.postit-read h3 { color:#f0d040;font-weight:700;margin:8px 0 2px; }
+  .postit-read h1{font-size:15px;} .postit-read h2{font-size:13px;} .postit-read h3{font-size:12px;}
+  .postit-read strong { color:#fff; font-weight:700; }
+  .postit-read em { color:#b0a040; font-style:italic; }
+  .postit-read hr { border:none; border-top:1px solid #3a3208; margin:8px 0; }
+  .postit-read-hint { font-size:10px; color:#4a4215; text-align:center; padding:4px 0 10px; }
+  @media(max-width:860px){
+    .main-layout { grid-template-columns: 1fr; padding: 0 16px 40px; }
+    .main-left { padding-right: 0; }
+    .main-right { position:static; }
   }
 
   /* 드래그 앤 드롭 */
@@ -649,15 +660,6 @@
   </div>
 </div>
 
-<!-- 탭 네비게이션 -->
-<div class="tab-nav">
-  <button class="tab-btn active" id="tabBtnApps" onclick="switchTab('apps')">앱 목록</button>
-  <button class="tab-btn" id="tabBtnMemo" onclick="switchTab('memo')">📝 메모</button>
-</div>
-
-<!-- 앱 목록 탭 -->
-<div class="tab-pane active" id="tabApps">
-
 <div class="pipeline">
   <div class="pipeline-title">시나리오 집필 파이프라인</div>
   <div class="pipeline-steps">
@@ -715,24 +717,31 @@
   </div>
 </div>
 <hr class="pipeline-divider">
-<div class="main">
-  <div class="section-label">앱 목록</div>
-  <div class="app-grid" id="appGrid"></div>
-</div>
 
-</div><!-- /tabApps -->
+<div class="main-layout">
+  <!-- 왼쪽: 앱 그리드 -->
+  <div class="main-left">
+    <div class="section-label">앱 목록</div>
+    <div class="app-grid" id="appGrid"></div>
+  </div>
 
-<!-- 메모 탭 -->
-<div class="tab-pane" id="tabMemo">
-  <div class="memo-wrap">
-    <div class="memo-toolbar">
-      <div class="memo-toolbar-left">임시저장 <span id="memoSavedAt">—</span></div>
-      <button class="btn" id="memoModeBtn" onclick="toggleMemoMode()">읽기 모드</button>
-      <button class="btn btn-primary" onclick="saveMemo()">저장</button>
+  <!-- 오른쪽: 포스트잇 메모 -->
+  <div class="main-right">
+    <div class="postit">
+      <div class="postit-header">
+        <div class="postit-title">📝 메모</div>
+        <div class="postit-saved" id="memoSavedAt">—</div>
+        <div class="postit-btns">
+          <button class="postit-btn" id="memoModeBtn" onclick="toggleMemoMode()">읽기</button>
+          <button class="postit-btn" onclick="saveMemo()">저장</button>
+        </div>
+      </div>
+      <textarea class="postit-textarea" id="memoTextarea"
+        placeholder="메모를 남겨두세요.&#10;# 제목, **굵게**, *기울임*"
+        oninput="onMemoInput()"></textarea>
+      <div class="postit-read" id="memoRead" onclick="switchMemoToEdit()"></div>
+      <div class="postit-read-hint" id="memoReadHint" style="display:none;">클릭하면 편집 모드</div>
     </div>
-    <textarea class="memo-textarea" id="memoTextarea" placeholder="작업 메모, 아이디어, 할 일 등을 자유롭게 적으세요.&#10;&#10;# 제목은 # 으로&#10;**굵게**, *기울임*, --- 구분선 지원" oninput="onMemoInput()"></textarea>
-    <div class="memo-read" id="memoRead" onclick="switchMemoToEdit()"></div>
-    <div class="memo-read-hint" id="memoReadHint" style="display:none;">클릭하면 편집 모드로 전환됩니다</div>
   </div>
 </div>
 
@@ -1099,15 +1108,7 @@ function initDragDrop() {
 }
 
 load();
-
-// ── 탭 전환 ──
-function switchTab(name) {
-  ['apps','memo'].forEach(t => {
-    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1))?.classList.toggle('active', t === name);
-    document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1))?.classList.toggle('active', t === name);
-  });
-  if (name === 'memo') loadMemo();
-}
+loadMemo();
 
 // ── 메모 ──
 const MEMO_KEY = 'launcher_memo_v1';
@@ -1147,12 +1148,12 @@ function toggleMemoMode() {
     rd.classList.add('active');
     ta.style.display = 'none';
     hint.style.display = 'block';
-    btn.textContent = '편집 모드';
+    btn.textContent = '편집';
   } else {
     rd.classList.remove('active');
     ta.style.display = '';
     hint.style.display = 'none';
-    btn.textContent = '읽기 모드';
+    btn.textContent = '읽기';
     ta.focus();
   }
 }
@@ -1166,12 +1167,12 @@ function switchMemoToEdit() {
   rd.classList.remove('active');
   ta.style.display = '';
   hint.style.display = 'none';
-  document.getElementById('memoModeBtn').textContent = '읽기 모드';
+  document.getElementById('memoModeBtn').textContent = '읽기';
   ta.focus();
 }
 
 function renderMemoMarkdown(text) {
-  if (!text.trim()) return '<span style="color:var(--text-dim)">내용 없음</span>';
+  if (!text.trim()) return '<span style="color:#4a4215">내용 없음</span>';
   return text
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/^### (.+)$/gm,'<h3>$1</h3>')
