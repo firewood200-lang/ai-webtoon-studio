@@ -1392,25 +1392,31 @@ function importJSON(e){
   const f=e.target.files[0]; if(!f)return;
   const r=new FileReader();
   r.onload=ev=>{
+    // ── 1단계: 형식 검증만 ──
+    let s;
     try{
-      const s=JSON.parse(ev.target.result);
-      if(!s.nodes||!s.resources)throw 0;
-      saveLocal();
-      if(!s.id) s.id=uid();
-      const projects=loadProjects();
-      const idx=projects.findIndex(p=>p.id===s.id);
-      if(idx>=0) projects[idx]=s; else projects.push(s);
-      localStorage.setItem('ws_projects',JSON.stringify(projects));
-      state=s; saveLocal(); render();
-      // File System Access API로 파일 핸들 연결 시도
-      if(window.showOpenFilePicker){
-        showToast('불러오기 완료 — JSON 저장 버튼으로 파일 연결하면 자동저장됩니다');
-      } else {
-        showToast('프로젝트 불러오기 완료');
-      }
-    }catch(err){alert("올바른 프로젝트 JSON이 아닙니다.");}
+      s=JSON.parse(ev.target.result);
+    }catch(err){
+      alert("JSON 파싱 실패: 파일이 손상되었거나 JSON 형식이 아닙니다.");
+      e.target.value=""; return;
+    }
+    // nodes 또는 items(구버전) 필드 허용
+    if(s.items && !s.nodes) s.nodes = s.items;
+    if(!s.nodes){ alert("올바른 프로젝트 JSON이 아닙니다.\n(nodes 필드가 없습니다)"); e.target.value=""; return; }
+    if(!s.resources) s.resources = [];
+
+    // ── 2단계: 상태 적용 ──
+    if(!s.id) s.id=uid();
+    const projects=loadProjects();
+    const idx=projects.findIndex(p=>p.id===s.id);
+    if(idx>=0) projects[idx]=s; else projects.push(s);
+    try{ localStorage.setItem('ws_projects',JSON.stringify(projects)); }
+    catch(err){ alert('저장 공간 부족으로 로드에 실패했습니다.'); e.target.value=""; return; }
+    state=s; saveLocal(); render();
+    showToast('프로젝트 불러오기 완료');
+    e.target.value="";
   };
-  r.readAsText(f); e.target.value="";
+  r.readAsText(f);
 }
 function stripInlineTags(s){
   // 【복선】...【/복선】 형태 태그 제거
@@ -1752,7 +1758,24 @@ function openResearchImport(){
           <span style="font-size:12px;color:#c8a96e;font-weight:700;letter-spacing:.08em">📥 리서치 결과 불러오기</span>
           <button onclick="closeResearchImport()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px">✕</button>
         </div>
-        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1">
+        <!-- 탭 -->
+        <div style="display:flex;border-bottom:1px solid #3a3530;flex-shrink:0">
+          <button id="ri-tab-json" onclick="riSwitchTab('json')"
+            style="flex:1;padding:9px;font-size:12px;font-family:inherit;border:none;border-bottom:2px solid #c8a96e;background:transparent;color:#c8a96e;cursor:pointer;font-weight:700">📂 JSON 파일</button>
+          <button id="ri-tab-notion" onclick="riSwitchTab('notion')"
+            style="flex:1;padding:9px;font-size:12px;font-family:inherit;border:none;border-bottom:2px solid transparent;background:transparent;color:#666;cursor:pointer">🌐 Notion</button>
+        </div>
+        <!-- JSON 파일 패널 -->
+        <div id="ri-panel-json" style="padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;flex:1">
+          <p style="font-size:11px;color:#888;margin:0">리서치 워크플로우 앱에서 내보낸 JSON 파일을 선택하세요.<br>프로젝트·축·결과가 자료실 항목으로 추가됩니다.</p>
+          <label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#c8a96e;color:#1a1714;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer">
+            📂 JSON 파일 선택
+            <input type="file" accept=".json" style="display:none" onchange="importResearchJSON(event)">
+          </label>
+          <div id="ri-json-status" style="font-size:11px;color:#888;min-height:16px;text-align:center"></div>
+        </div>
+        <!-- Notion 패널 -->
+        <div id="ri-panel-notion" style="padding:14px 16px;display:none;flex-direction:column;gap:10px;overflow-y:auto;flex:1">
           <div style="display:flex;flex-direction:column;gap:6px">
             <label style="font-size:11px;color:#888;font-weight:600">Notion 토큰 (secret_...)</label>
             <input id="ri-token" type="password" placeholder="secret_xxxxxxxxxxxx"
@@ -1790,6 +1813,88 @@ function openResearchImport(){
 function closeResearchImport(){
   const el=document.getElementById('ri-modal');
   if(el) el.style.display='none';
+}
+
+function riSwitchTab(tab){
+  const isJson = tab==='json';
+  document.getElementById('ri-panel-json').style.display  = isJson ? 'flex' : 'none';
+  document.getElementById('ri-panel-notion').style.display = isJson ? 'none' : 'flex';
+  const tjson   = document.getElementById('ri-tab-json');
+  const tnotion = document.getElementById('ri-tab-notion');
+  if(tjson){
+    tjson.style.borderBottomColor   = isJson ? '#c8a96e' : 'transparent';
+    tjson.style.color               = isJson ? '#c8a96e' : '#666';
+    tjson.style.fontWeight          = isJson ? '700' : '400';
+  }
+  if(tnotion){
+    tnotion.style.borderBottomColor = isJson ? 'transparent' : '#c8a96e';
+    tnotion.style.color             = isJson ? '#666' : '#c8a96e';
+    tnotion.style.fontWeight        = isJson ? '400' : '700';
+  }
+}
+
+function importResearchJSON(e){
+  const f = e.target.files[0]; if(!f) return;
+  const statusEl = document.getElementById('ri-json-status');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    let data;
+    try{ data = JSON.parse(ev.target.result); }
+    catch(err){ statusEl.textContent='⚠️ JSON 파싱 실패: 파일이 손상되었습니다.'; statusEl.style.color='#e07070'; return; }
+
+    // research_v3 형식: { projects:[{id, title, axes:[{id,name,results:[{id,title,content,...}]}]}] }
+    const projects = data.projects || [];
+    if(!projects.length){ statusEl.textContent='⚠️ 프로젝트가 없는 파일입니다.'; statusEl.style.color='#e07070'; return; }
+
+    let added = 0;
+    projects.forEach(proj => {
+      const projName = proj.title || proj.name || '리서치';
+      const axes = proj.axes || [];
+      axes.forEach(axis => {
+        const axisName = axis.name || axis.title || '';
+        const results = axis.results || [];
+        results.forEach(res => {
+          const content = [
+            res.content || res.text || '',
+            res.note || ''
+          ].filter(Boolean).join('\n\n');
+          const resource = {
+            id: uid(),
+            user_id: state.user_id || 'local',
+            title: [projName, axisName, res.title||''].filter(Boolean).join(' › '),
+            content: content,
+            source: '리서치 JSON',
+            tags: [projName, axisName].filter(Boolean),
+            star: res.star || 0,
+            createdAt: res.createdAt || new Date().toISOString()
+          };
+          state.resources.push(resource);
+          added++;
+        });
+        // 축 자체도 자료로 추가 (결과 없는 경우 대비)
+        if(!results.length && (axis.memo || axis.summary)){
+          state.resources.push({
+            id: uid(),
+            user_id: state.user_id || 'local',
+            title: [projName, axisName].filter(Boolean).join(' › '),
+            content: axis.memo || axis.summary || '',
+            source: '리서치 JSON',
+            tags: [projName, axisName].filter(Boolean),
+            star: 0,
+            createdAt: new Date().toISOString()
+          });
+          added++;
+        }
+      });
+    });
+
+    saveLocal();
+    statusEl.style.color = '#7ec87e';
+    statusEl.textContent = `✅ ${added}개 자료 추가 완료 (${projects.length}개 프로젝트)`;
+    setTimeout(closeResearchImport, 1500);
+  };
+  reader.readAsText(f);
+  e.target.value='';
 }
 
 const WS_DBS = [
