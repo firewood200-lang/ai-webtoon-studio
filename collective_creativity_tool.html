@@ -246,9 +246,9 @@ body.reader-lock{overflow:hidden}
   <div class="settings-row"><label>API Key</label><input type="password" id="cfg-claude-key" placeholder="sk-ant-..."></div>
   <div class="settings-row"><label>모델</label>
     <select id="cfg-claude-model" style="border:0.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:14px;background:var(--bg);color:var(--text);width:100%">
-      <option value="claude-sonnet-4-6">claude-sonnet-4-6 (권장)</option>
-      <option value="claude-opus-4-8">claude-opus-4-8</option>
-      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5 (빠름)</option>
+      <option value="claude-sonnet-4-5">claude-sonnet-4-5 (권장)</option>
+      <option value="claude-opus-4-5">claude-opus-4-5</option>
+      <option value="claude-haiku-4-5">claude-haiku-4-5 (빠름)</option>
     </select>
   </div>
 
@@ -278,9 +278,8 @@ body.reader-lock{overflow:hidden}
     <select id="cfg-gemini-model" style="border:0.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:14px;background:var(--bg);color:var(--text);width:100%">
       <option value="gemini-2.5-flash">gemini-2.5-flash (권장)</option>
       <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-      <option value="gemini-3.5-flash">gemini-3.5-flash</option>
-      <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-      <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (빠름)</option>
+      <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+      <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (저비용)</option>
     </select>
   </div>
 
@@ -757,7 +756,7 @@ function toggleSettings(){document.getElementById('settings-panel').classList.to
 async function callClaude(prompt,system=''){
   const key=getCfg().claudeKey;
   if(!key)throw new Error('Claude API 키 미설정');
-  const body={model:getCfg().claudeModel||'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:prompt}]};
+  const body={model:getCfg().claudeModel||'claude-sonnet-4-5',max_tokens:4000,messages:[{role:'user',content:prompt}]};
   if(system)body.system=system;
   const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify(body)});
   if(!res.ok)throw new Error('Claude 오류: '+(await res.text()).slice(0,100));
@@ -774,7 +773,7 @@ async function callGPT(prompt,system=''){
 async function callGemini(prompt){
   const key=getCfg().geminiKey;
   if(!key)throw new Error('Gemini API 키 미설정');
-  const model=getCfg().geminiModel||'gemini-1.5-pro';
+  const model=getCfg().geminiModel||'gemini-2.5-flash';
   const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:8192}})});
   if(!res.ok)throw new Error('Gemini 오류: '+(await res.text()).slice(0,100));
   const d=await res.json();return d.candidates?.[0]?.content?.parts?.[0]?.text||'';
@@ -1506,7 +1505,7 @@ function confirmExit(){closeExitModal();window.close();setTimeout(()=>toast('탭
 
 // ── AI 엔진 선택 모달 ──
 const CCV2_MODELS={
-  claude:['claude-sonnet-4-6','claude-opus-4-8','claude-haiku-4-5-20251001'],
+  claude:['claude-sonnet-4-5','claude-opus-4-5','claude-haiku-4-5'],
   gpt:['gpt-4o','gpt-4o-mini','gpt-4.1'],
   gemini:['gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash']
 };

@@ -918,7 +918,7 @@ body {
   <span class="session-bar-label">작업 세션</span>
   <button class="btn btn-ghost btn-sm" onclick="saveSession()">저장</button>
   <label class="btn btn-ghost btn-sm" style="cursor:pointer;">불러오기
-    <input type="file" accept=".json" style="display:none" onchange="loadSession(event)">
+    <input type="file" accept=".json" style="display:none" onchange="handleLoad(event)">
   </label>
 </div>
 
@@ -1794,11 +1794,11 @@ async function saveToNotion(){
   const titleText=`${ep} — ${today}`;
   const sections=[
     {label:'시나리오 초안',v:val('scenario')},
-    {label:'자료수집 결과',v:val('out-gemini')},
-    {label:'서사보강 결과',v:val('out-gpt')},
-    {label:'초고',v:val('out-claude')},
-    {label:'검수 결과',v:val('out-review')},
-    {label:'최종 원고',v:val('out-final')}
+    {label:'자료수집 결과',v:val('gemini-result')},
+    {label:'서사보강 결과',v:val('gpt-result')},
+    {label:'초고',v:val('claude-result')},
+    {label:'검수 결과',v:val('review-result')},
+    {label:'최종 원고',v:val('final-result')}
   ].filter(s=>s.v);
   const children=sections.flatMap(s=>[
     {object:'block',type:'heading_2',heading_2:{rich_text:[{type:'text',text:{content:s.label}}]}},
@@ -1867,6 +1867,12 @@ async function saveDecisionLog(){
     else setDlogStatus('저장 실패: '+(await res.text()).slice(0,80),'err');
   }catch(e){setDlogStatus('오류: '+e.message,'err');}
   finally{btn.disabled=false;}
+}
+function setDlogStatus(msg, type){
+  const el = g('dlog-status');
+  if(!el) return;
+  el.textContent = msg;
+  el.className = 'dlog-status' + (type ? ' ' + type : '');
 }
 function saveSession(){
   const data={

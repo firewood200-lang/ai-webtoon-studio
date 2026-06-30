@@ -370,10 +370,10 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
         <div class="ctrl-row">
           <span class="ctrl-lbl">모델</span>
           <select class="ctrl-sel" id="modelSelect">
-            <option value="gemini-3.1-flash-image">Flash</option>
-            <option value="gemini-3.1-flash-image-preview">Flash Preview</option>
-            <option value="gemini-3-pro-image">Pro</option>
-            <option value="gemini-3-pro-image-preview">Pro Preview</option>
+            <option value="gemini-2.0-flash-preview-image-generation">Flash Image Gen (권장)</option>
+            <option value="gemini-2.0-flash-exp">Flash Experimental</option>
+            <option value="gemini-2.5-flash-preview-05-20">Flash 2.5 Preview</option>
+            <option value="gemini-2.5-pro-preview-05-06">Pro 2.5 Preview</option>
           </select>
           <span class="ctrl-arrow">›</span>
         </div>
@@ -504,10 +504,10 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
         <div class="ctrl-row">
           <span class="ctrl-lbl">모델</span>
           <select class="ctrl-sel" id="dModelSelect">
-            <option value="gemini-3.1-flash-image">Flash</option>
-            <option value="gemini-3.1-flash-image-preview">Flash Preview</option>
-            <option value="gemini-3-pro-image">Pro</option>
-            <option value="gemini-3-pro-image-preview">Pro Preview</option>
+            <option value="gemini-2.0-flash-preview-image-generation">Flash Image Gen (권장)</option>
+            <option value="gemini-2.0-flash-exp">Flash Experimental</option>
+            <option value="gemini-2.5-flash-preview-05-20">Flash 2.5 Preview</option>
+            <option value="gemini-2.5-pro-preview-05-06">Pro 2.5 Preview</option>
           </select>
           <span class="ctrl-arrow">›</span>
         </div>
@@ -729,10 +729,10 @@ const AUTO_LINK_MAP = [
 
 // ── 모델 비용 ──
 const MODEL_COST_USD = {
-  'gemini-3.1-flash-image':         0.067,
-  'gemini-3.1-flash-image-preview': 0.067,
-  'gemini-3-pro-image':             0.134,
-  'gemini-3-pro-image-preview':     0.134,
+  'gemini-2.0-flash-preview-image-generation': 0.040,
+  'gemini-2.0-flash-exp':                      0.040,
+  'gemini-2.5-flash-preview-05-20':            0.067,
+  'gemini-2.5-pro-preview-05-06':              0.134,
 };
 
 // ── 상태 ──
@@ -1660,7 +1660,7 @@ function syncExitChk(cb,rowId){document.getElementById(rowId)?.classList.toggle(
 function confirmExit(){closeExitModal();window.close();setTimeout(()=>showToast('탭을 직접 닫아주세요'),300);}
 
 // ── AI 엔진 선택 모달 ──
-const AIW_MODELS=['gemini-3.1-flash-image','gemini-3.1-flash-image-preview','gemini-3-pro-image','gemini-3-pro-image-preview'];
+const AIW_MODELS=['gemini-2.0-flash-preview-image-generation','gemini-2.0-flash-exp','gemini-2.5-flash-preview-05-20','gemini-2.5-pro-preview-05-06'];
 function openAiEngineModal(){
   const mSel=document.getElementById('modelSelect');
   const cur=mSel?mSel.value:AIW_MODELS[0];

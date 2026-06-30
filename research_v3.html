@@ -317,7 +317,7 @@ let state = {
     notionResultsDB: '1262f7115d4b4f2b9003496956c5b9bf',
     gptApiKey: '', gptModel: 'gpt-4o',
     geminiApiKey: '', geminiModel: 'gemini-2.5-flash',
-    claudeApiKey: '', claudeModel: 'claude-sonnet-4-6',
+    claudeApiKey: '', claudeModel: 'claude-sonnet-4-5',
     theme: 'dark', fontSize: 15
   }
 };
@@ -502,8 +502,8 @@ function toggleReaderEdit() {
   const isEditing = editorEl.style.display !== 'none';
   if (isEditing) {
     // 편집 모드 → 읽기 모드
-    textEl.textContent = editorEl.value;
     _readerText = editorEl.value;
+    textEl.innerHTML = renderMd(_readerText);
     textEl.style.display = 'block';
     editorEl.style.display = 'none';
     saveBtn.style.display = 'none';
@@ -657,7 +657,7 @@ async function callGemini(systemPrompt, userPrompt, onChunk) {
 async function callClaude(systemPrompt, userPrompt, onChunk) {
   const key = state.settings.claudeApiKey;
   if (!key) { toast('⚠️ 설정에서 Claude API 키를 입력해주세요'); return null; }
-  const model = state.settings.claudeModel || 'claude-sonnet-4-6';
+  const model = state.settings.claudeModel || 'claude-sonnet-4-5';
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -1240,7 +1240,7 @@ function addAxis() {
 const MODEL_OPTIONS = {
   GPT: ['gpt-4.1 (권장)','gpt-4.1-mini','gpt-4o','gpt-4o-mini','o3-mini'],
   Gemini: ['gemini-2.5-flash (권장)','gemini-2.5-pro'],
-  Claude: ['claude-sonnet-4-6 (권장)','claude-opus-4-8','claude-haiku-4-5']
+  Claude: ['claude-sonnet-4-5','claude-opus-4-5','claude-haiku-4-5']
 };
 function updateModelOptions(ai) {
   const sel = document.getElementById('ax-model'); if(!sel) return;
@@ -1568,7 +1568,7 @@ function openSettings() {
     </div>
     <div class="setting-item">
       <div class="setting-label">모델</div>
-      ${sel('s-gemini-model',[['gemini-2.5-flash','gemini-2.5-flash (권장)'],['gemini-2.5-flash-lite','gemini-2.5-flash-lite (저비용)'],['gemini-2.5-pro','gemini-2.5-pro (고성능)'],['gemini-3.5-flash','gemini-3.5-flash (최신)']],s.geminiModel||'gemini-2.5-flash')}
+      ${sel('s-gemini-model',[['gemini-2.5-flash','gemini-2.5-flash (권장)'],['gemini-2.5-flash-lite','gemini-2.5-flash-lite (저비용)'],['gemini-2.5-pro','gemini-2.5-pro (고성능)'],['gemini-2.0-flash','gemini-2.0-flash']],s.geminiModel||'gemini-2.5-flash')}
     </div>
 
     <div class="section-title">Claude</div>
@@ -1578,7 +1578,7 @@ function openSettings() {
     </div>
     <div class="setting-item">
       <div class="setting-label">모델</div>
-      ${sel('s-claude-model',[['claude-sonnet-4-6','claude-sonnet-4-6 (권장)'],['claude-opus-4-6','claude-opus-4-6'],['claude-haiku-4-5-20251001','claude-haiku-4-5 (빠름)']],s.claudeModel||'claude-sonnet-4-6')}
+      ${sel('s-claude-model',[['claude-sonnet-4-5','claude-sonnet-4-5 (권장)'],['claude-opus-4-5','claude-opus-4-5'],['claude-haiku-4-5','claude-haiku-4-5 (빠름)']],s.claudeModel||'claude-sonnet-4-5')}
     </div>
 
     <div class="section-title">노션 연동</div>
@@ -1736,7 +1736,7 @@ window.addEventListener('beforeunload', e => { e.preventDefault(); e.returnValue
 const RWF_AI_MODELS = {
   gpt: ['gpt-4o','gpt-4o-mini','gpt-4.1'],
   gemini: ['gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash'],
-  claude: ['claude-sonnet-4-6','claude-opus-4-8','claude-haiku-4-5-20251001']
+  claude: ['claude-sonnet-4-5','claude-opus-4-5','claude-haiku-4-5']
 };
 function openAiEngineModal() {
   const s = state.settings;
