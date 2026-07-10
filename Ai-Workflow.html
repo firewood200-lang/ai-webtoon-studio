@@ -1234,11 +1234,20 @@ function evalAction(result, rating) {
     saveLog();
     renderLogHistory();
   }
-  if(result==='fail' && comment && lastResult) {
-    // 코멘트를 "추가 지시사항"에 채워 넣고 결과 이미지를 슬롯1에 넣어서, 그 코멘트를 반영해 바로 다시 작업할 수 있게 한다
-    continueEdit({ silent: true });
+  if(result==='fail' && comment) {
+    // 실패한 "결과물"을 슬롯에 다시 넣지 않는다 - 틀린 결과를 원본인 것처럼 다시 입력하면
+    // (예: 펜터치인데 배경이 잘못 그려진 결과를 러프 스케치 슬롯에 넣고 다시 돌리는 식) 논리적으로 맞지 않고
+    // 오류가 그대로 재생산되기 쉽다. 슬롯의 원본 이미지는 그대로 두고, 코멘트만 "추가 지시사항"에 반영해서
+    // 같은 원본 + 수정된 지시사항으로 다시 실행할 수 있게 한다.
     setAllFineTune(comment);
-    showToast(`Fail로 평가됐습니다${ratingStr} — 코멘트를 반영해 슬롯1에서 다시 작업하세요`);
+    document.getElementById('resultModal').classList.remove('open');
+    if(!isDesktop()) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab==='work'));
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById('pageWork').classList.add('active');
+      document.getElementById('runFixed').style.display='block';
+    }
+    showToast(`Fail로 평가됐습니다${ratingStr} — 코멘트를 반영해 같은 원본으로 다시 실행하세요`);
   } else {
     showToast(`${result==='pass'?'Pass':'Fail'}로 평가됐습니다${ratingStr} ${result==='pass'?'✓':''}`);
   }
