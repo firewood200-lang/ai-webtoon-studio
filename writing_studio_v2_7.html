@@ -1976,7 +1976,10 @@ async function searchResearchResults(){
   riCurrentItems=[];
   document.getElementById('ri-addall-btn').style.display='none';
   try{
-    const all = (await Promise.all(WS_DBS.map(db=>queryDb(proxy,token,db,query)))).flat();
+    // 조사축(axes) DB는 집필에 바로 쓰이는 결과물이 아니라 조사 계획/과정 기록이라
+    // 리서치 불러오기 대상에서 제외 — 실제 집필에 필요한 결과물(결과/프로젝트)만 가져온다
+    const searchDbs = WS_DBS.filter(db=>db.type!=='axes');
+    const all = (await Promise.all(searchDbs.map(db=>queryDb(proxy,token,db,query)))).flat();
     if(!all.length){statusEl.textContent='결과가 없습니다.';return;}
     statusEl.textContent=`${all.length}건 검색됨 — 추가할 항목을 선택하세요.`;
     document.getElementById('ri-addall-btn').style.display=all.length>1?'block':'none';
