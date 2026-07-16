@@ -837,6 +837,9 @@ function setAllCut(v) { ['cutNumber','dCutNumber'].forEach(id=>{ const e=documen
 function getAllFineTune() { return (document.getElementById(isDesktop()?'dFineTune':'fineTune')||{}).value||''; }
 function clearAllFineTune() { ['fineTune','dFineTune'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; }); }
 function setAllFineTune(v) { ['fineTune','dFineTune'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=v; }); }
+// 공정별 미세수정 기본 문구 — 펜터치는 러프 프롬프트 외 임의 미화/추가를 막기 위한 기본값을 항상 유지
+const FINE_TUNE_DEFAULT = { pentouch: '펜터치 프롬프트대로 이미지를 생성하고 미화하거나 추가하지 말것' };
+function applyFineTuneDefault() { setAllFineTune(FINE_TUNE_DEFAULT[currentProcess] || ''); }
 function getEvalComment() { return (document.getElementById(isDesktop()?'dEvalComment':'evalComment')||{}).value||''; }
 function clearAllEvalComment() { ['evalComment','dEvalComment'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; }); }
 
@@ -852,6 +855,7 @@ function clearAllEvalComment() { ['evalComment','dEvalComment'].forEach(id=>{ co
   bindEvents();
   updateStatUI();
   syncCtrlsOnInit();
+  applyFineTuneDefault();
 })();
 
 // ── 슬롯 렌더링 (모바일 + 데스크탑 동시) ──
@@ -1010,6 +1014,7 @@ function bindEvents() {
       renderSlots();
       loadPrompt();
       applyPromptLock();
+      applyFineTuneDefault();
       setStatus('','');
     });
   });
@@ -1341,7 +1346,7 @@ async function runProcess() {
   clearInterval(timerInterval);
   const elapsed = ((Date.now()-t0)/1000).toFixed(1);
   setBtnRunDisabled(false);
-  clearAllFineTune();
+  applyFineTuneDefault();
 
   if(result && result.success) {
     setStatus('ok',`완료 (${elapsed}초)`);
