@@ -1315,9 +1315,11 @@ function renderStats(){
   if(curEl) curEl.textContent=cur ? stripHtml(cur.body||"").replace(/\s/g,"").length : 0;
 }
 // 카드 미리보기에서 굳이 보여줄 필요 없는 관리용 속성 라인 제외
-const RES_PREVIEW_SKIP=/^(프로젝트ID|축ID|배정AI|상태|결과수|최종평가|완료축수|진행률|축수):/;
+const RES_PREVIEW_SKIP=/^(프로젝트ID|축ID|배정AI|상태|결과수|최종평가|완료축수|진행률|축수|프로젝트명):/;
 function resourcePreviewText(body){
-  return (body||"").split("\n").filter(l=>!RES_PREVIEW_SKIP.test(l.trim())).join(" ").trim();
+  const cleaned=(body||"").split("\n").filter(l=>!RES_PREVIEW_SKIP.test(l.trim())).join(" ").trim();
+  // 마크다운 기호(#, *, `)는 미리보기에서 시각적 잡음만 되므로 제거
+  return cleaned.replace(/^#{1,6}\s*/gm,"").replace(/[*`_>#]/g,"").replace(/\s+/g," ").trim();
 }
 function runResourceSearch(){
   const q=(document.getElementById("resourceSearch")?.value||"").trim().toLowerCase();
@@ -2043,7 +2045,7 @@ async function importResearchPage(pageId, title, dbType, dbLabel, sub, pageProps
     } else {
       // 조사축/프로젝트 DB: 검색 시 이미 받은 properties 사용 (추가 API 호출 없음)
       // 관리용 속성(ID/배정AI/상태 등)은 본문에서 제외하고 실제 내용 위주로만 저장
-      const SKIP_PROPS=new Set(['프로젝트ID','축ID','배정AI','상태','결과수','최종평가','완료축수','진행률','축수']);
+      const SKIP_PROPS=new Set(['프로젝트ID','축ID','배정AI','상태','결과수','최종평가','완료축수','진행률','축수','프로젝트명']);
       const lines=[];
       Object.entries(pageProps||{}).forEach(([key,val])=>{
         if(SKIP_PROPS.has(key)) return;
