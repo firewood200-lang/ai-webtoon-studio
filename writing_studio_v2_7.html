@@ -1321,6 +1321,12 @@ function resourcePreviewText(body){
   // 마크다운 기호(#, *, `)는 미리보기에서 시각적 잡음만 되므로 제거
   return cleaned.replace(/^#{1,6}\s*/gm,"").replace(/[*`_>#]/g,"").replace(/\s+/g," ").trim();
 }
+// 제목이 "[구분] [프로젝트명] 실제 제목" 형태로 브래킷이 두 번 겹치면
+// 앞쪽 구분 라벨만 남기고 두 번째(프로젝트명) 브래킷은 표시에서 제외
+// (기존에 이미 저장된 자료도 화면에서 즉시 정리되도록 표시 단계에서 처리)
+function resourceDisplayTitle(title){
+  return (title||"").replace(/^(\[[^\]]+\])\s*\[[^\]]+\]\s*/,"$1 ").trim();
+}
 function runResourceSearch(){
   const q=(document.getElementById("resourceSearch")?.value||"").trim().toLowerCase();
   const list=document.getElementById("resourceList"); list.innerHTML="";
@@ -1329,7 +1335,7 @@ function runResourceSearch(){
     const div=document.createElement("div");
     div.className="lib-item"+(r.id===state.currentResourceId?" active":"");
     const preview=resourcePreviewText(r.body);
-    div.innerHTML=`<b title="${esc(r.title)}">${esc(r.title)}</b><div class="small">${esc(preview.slice(0,60))}</div>`;
+    div.innerHTML=`<b title="${esc(r.title)}">${esc(resourceDisplayTitle(r.title))}</b><div class="small">${esc(preview.slice(0,60))}</div>`;
     div.onclick=()=>{state.currentResourceId=r.id;saveLocal();runResourceSearch();renderResourceEditor();toggleLibEditor(true)};
     list.appendChild(div);
   });
@@ -2059,9 +2065,17 @@ async function importResearchPage(pageId, title, dbType, dbLabel, sub, pageProps
       });
       body=lines.join('\n');
     }
+    // 제목 안에 "[프로젝트명] ..." 형태로 프로젝트명이 중복 표기된 경우 제거
+    // (집필실은 어차피 한 프로젝트 전용 공간이라 매 카드마다 반복 표기할 필요가 없음)
+    const projName=(pageProps?.['프로젝트명']?.rich_text||[]).map(t=>t.plain_text).join('').trim();
+    let cleanTitle=title;
+    if(projName){
+      const escRe=projName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      cleanTitle=cleanTitle.replace(new RegExp('^\\s*\\['+escRe+'\\]\\s*'),'').trim()||title;
+    }
     const r={
       id:uid(),
-      title:`[${dbLabel}] ${title}`,
+      title:`[${dbLabel}] ${cleanTitle}`,
       body:body||'(본문 없음)',
       memo:`출처: ${dbLabel} DB | ${sub}`
     };
