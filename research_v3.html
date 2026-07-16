@@ -882,7 +882,10 @@ function cleanDbId(id) { return String(id||'').trim().replace(/-/g,''); }
 function shortDbId(id) { const v = cleanDbId(id); return v ? `${v.slice(0,6)}…${v.slice(-6)}` : '미입력'; }
 
 async function notionRequest(url, options, label) {
-  const res = await fetch(url, options);
+  const token = state.settings.notionToken;
+  if (!token) throw new Error('노션 API 토큰이 설정되지 않았습니다. 설정에서 입력해주세요.');
+  const headers = { ...(options.headers||{}), 'X-Notion-Key': token };
+  const res = await fetch(url, { ...options, headers });
   let data = null;
   try { data = await res.json(); } catch(e) {}
   if (!res.ok) {
