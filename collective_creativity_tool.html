@@ -211,6 +211,12 @@ body.reader-lock{overflow:hidden}
   </div>
 </div>
 
+<!-- ── API 비용 경고 배너 ── -->
+<div class="info-box info-amber" id="cost-warning-banner" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+  <span>⚠ 이 도구를 처음부터 끝까지 1회 실행하면 Claude·GPT·Gemini API 비용이 합쳐서 약 2,000~3,000원 정도 발생할 수 있습니다. (실제 API 키로 호출되며, 각 서비스 콘솔에서 사용량을 확인할 수 있습니다)</span>
+  <button class="btn-sm" style="flex-shrink:0" onclick="dismissCostWarning()">닫기</button>
+</div>
+
 <!-- 종료 체크리스트 모달 -->
 <div class="cmn-modal-overlay" id="exit-modal">
   <div class="cmn-modal">
@@ -1549,6 +1555,21 @@ async function saveToNotion(){
 /* ========== 초�
 기화 ========== */
 try{const saved=localStorage.getItem('ccv2');if(saved)applySession(JSON.parse(saved));}catch(e){}
+
+/* ========== API 비용 경고 배너 ========== */
+function dismissCostWarning(){
+  const el=document.getElementById('cost-warning-banner');
+  if(el)el.style.display='none';
+  try{localStorage.setItem('ccv2_costWarnDismissed','1');}catch(e){}
+}
+(function(){
+  try{
+    if(localStorage.getItem('ccv2_costWarnDismissed')){
+      const el=document.getElementById('cost-warning-banner');
+      if(el)el.style.display='none';
+    }
+  }catch(e){}
+})();
 </script>
 
 <!-- ── 오류 로그 패널 ── -->
