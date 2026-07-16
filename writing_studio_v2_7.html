@@ -1795,7 +1795,10 @@ function openResearchImport(){
             <button onclick="searchResearchResults()"
               style="background:#c8a96e;color:#1a1714;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">검색</button>
           </div>
-          <div id="ri-status" style="font-size:11px;color:#888;min-height:16px"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div id="ri-status" style="font-size:11px;color:#888;min-height:16px;flex:1"></div>
+            <button id="ri-addall-btn" onclick="importAllResearchResults()" style="display:none;background:#3a3020;color:#c8a96e;border:1px solid #c8a96e;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">전체 추가</button>
+          </div>
           <div id="ri-results" style="display:flex;flex-direction:column;gap:6px"></div>
         </div>
       </div>`;
@@ -1905,6 +1908,7 @@ const WS_DBS = [
   { id:'eecb42f9-c2b3-43c9-bfdc-521502e8f8de', label:'프로젝트', type:'project',
     titleProp:'제목', extraProps:['간략설명'] }
 ];
+let riCurrentItems = []; // 전체 추가 기능용 — 검색 결과 카드 정보 보관
 
 async function queryDb(proxy, token, db, query){
   const titleFilter = query ? {property: db.titleProp, title:{contains:query}} : undefined;
@@ -1928,10 +1932,13 @@ async function searchResearchResults(){
   if(!proxy){statusEl.textContent='⚠ 프록시 URL을 입력하세요.';return;}
   wsNotion.token=token; wsNotion.proxy=proxy; saveWsNotion();
   statusEl.textContent='검색 중…'; resultsEl.innerHTML='';
+  riCurrentItems=[];
+  document.getElementById('ri-addall-btn').style.display='none';
   try{
     const all = (await Promise.all(WS_DBS.map(db=>queryDb(proxy,token,db,query)))).flat();
     if(!all.length){statusEl.textContent='결과가 없습니다.';return;}
     statusEl.textContent=`${all.length}건 검색됨 — 추가할 항목을 선택하세요.`;
+    document.getElementById('ri-addall-btn').style.display=all.length>1?'block':'none';
     all.forEach(({page, dbType, dbLabel})=>{
       const props=page.properties||{};
       const getTitle = ()=>(props['제목']?.title||[]).map(t=>t.plain_text).join('')
@@ -1955,8 +1962,25 @@ async function searchResearchResults(){
       div.onmouseout=()=>div.style.borderColor='#3a3530';
       div.onclick=()=>importResearchPage(pageId, title, dbType, dbLabel, sub, props, div);
       resultsEl.appendChild(div);
+      riCurrentItems.push({pageId, title, dbType, dbLabel, sub, props, div});
     });
   }catch(e){statusEl.textContent='네트워크 오류: '+e.message;}
+}
+
+async function importAllResearchResults(){
+  const statusEl=document.getElementById('ri-status');
+  const btn=document.getElementById('ri-addall-btn');
+  const todo=riCurrentItems.filter(it=>it.div.dataset.imported!=='1');
+  if(!todo.length){statusEl.textContent='추가할 항목이 없습니다.';return;}
+  btn.disabled=true; btn.style.opacity='.5'; btn.style.cursor='not-allowed';
+  let done=0;
+  for(const it of todo){
+    statusEl.textContent=`전체 추가 중… (${done+1}/${todo.length})`;
+    await importResearchPage(it.pageId, it.title, it.dbType, it.dbLabel, it.sub, it.props, it.div);
+    done++;
+  }
+  statusEl.textContent=`✅ ${done}개 전체 추가 완료`;
+  btn.disabled=false; btn.style.opacity='1'; btn.style.cursor='pointer';
 }
 
 async function importResearchPage(pageId, title, dbType, dbLabel, sub, pageProps, divEl){
@@ -2002,7 +2026,7 @@ async function importResearchPage(pageId, title, dbType, dbLabel, sub, pageProps
     state.resources.push(r);
     state.currentResourceId=r.id;
     saveLocal(); renderResources(); renderResourceEditor();
-    if(divEl){divEl.style.borderColor='#c8a96e'; divEl.style.opacity='.5'; divEl.style.pointerEvents='none';}
+    if(divEl){divEl.style.borderColor='#c8a96e'; divEl.style.opacity='.5'; divEl.style.pointerEvents='none'; divEl.dataset.imported='1';}
     statusEl.textContent='가져오기 완료 ✓';
   }catch(e){statusEl.textContent='본문 오류: '+e.message;}
 }
