@@ -1314,6 +1314,11 @@ function renderStats(){
   const curEl=document.getElementById("curCharCount");
   if(curEl) curEl.textContent=cur ? stripHtml(cur.body||"").replace(/\s/g,"").length : 0;
 }
+// 카드 미리보기에서 굳이 보여줄 필요 없는 관리용 속성 라인 제외
+const RES_PREVIEW_SKIP=/^(프로젝트ID|축ID|배정AI|상태|결과수|최종평가|완료축수|진행률|축수):/;
+function resourcePreviewText(body){
+  return (body||"").split("\n").filter(l=>!RES_PREVIEW_SKIP.test(l.trim())).join(" ").trim();
+}
 function runResourceSearch(){
   const q=(document.getElementById("resourceSearch")?.value||"").trim().toLowerCase();
   const list=document.getElementById("resourceList"); list.innerHTML="";
@@ -1321,7 +1326,8 @@ function runResourceSearch(){
   filtered.forEach(r=>{
     const div=document.createElement("div");
     div.className="lib-item"+(r.id===state.currentResourceId?" active":"");
-    div.innerHTML=`<b title="${esc(r.title)}">${esc(r.title)}</b><div class="small">${esc((r.body||"").slice(0,50))}</div>`;
+    const preview=resourcePreviewText(r.body);
+    div.innerHTML=`<b title="${esc(r.title)}">${esc(r.title)}</b><div class="small">${esc(preview.slice(0,60))}</div>`;
     div.onclick=()=>{state.currentResourceId=r.id;saveLocal();runResourceSearch();renderResourceEditor();toggleLibEditor(true)};
     list.appendChild(div);
   });
@@ -2036,8 +2042,11 @@ async function importResearchPage(pageId, title, dbType, dbLabel, sub, pageProps
       }
     } else {
       // 조사축/프로젝트 DB: 검색 시 이미 받은 properties 사용 (추가 API 호출 없음)
+      // 관리용 속성(ID/배정AI/상태 등)은 본문에서 제외하고 실제 내용 위주로만 저장
+      const SKIP_PROPS=new Set(['프로젝트ID','축ID','배정AI','상태','결과수','최종평가','완료축수','진행률','축수']);
       const lines=[];
       Object.entries(pageProps||{}).forEach(([key,val])=>{
+        if(SKIP_PROPS.has(key)) return;
         let text='';
         if(val.type==='title') text=(val.title||[]).map(t=>t.plain_text).join('');
         else if(val.type==='rich_text') text=(val.rich_text||[]).map(t=>t.plain_text).join('');
