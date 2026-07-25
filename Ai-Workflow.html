@@ -227,6 +227,7 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
 @media(min-width:1024px){
   .nav,.run-fixed,.main{display:none!important;}
   .result-modal{display:none!important;}
+  #buildVersion{display:block!important;}
   #desktopLayout{
     display:grid;
     grid-template-columns:var(--desk-left) 1fr var(--desk-right);
@@ -319,6 +320,7 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
     <div class="header-title">AI 워크플로우</div>
     <div class="header-last">마지막 사용 <span id="lastUsedBadge">처음 실행</span> · <span class="header-process" id="headerProcess">펜터치</span></div>
   </div>
+  <div id="buildVersion" style="display:none;font-size:9px;color:var(--text3);opacity:0.7;font-family:monospace;letter-spacing:0.04em;white-space:nowrap;">배포 —</div>
   <div class="header-btns-right">
     <button class="hbtn-sm" onclick="openAiEngineModal()">⚡ AI</button>
     <button class="btn-settings-open" id="btnSettingsOpen">⚙</button>
@@ -650,6 +652,18 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
     <button class="btn-modal-close" id="btnSettingsClose">✕</button>
   </div>
   <div class="settings-modal-body">
+    <div class="settings-section-title">설정 백업</div>
+    <div class="settings-card">
+      <div class="settings-row" style="gap:8px;">
+        <button onclick="exportSettingsBackup()" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font-size:12px;cursor:pointer;font-family:inherit;">⬇ 파일로 내보내기</button>
+        <button onclick="document.getElementById('settingsImportFile').click()" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font-size:12px;cursor:pointer;font-family:inherit;">⬆ 파일에서 불러오기</button>
+        <input type="file" id="settingsImportFile" accept="application/json" style="display:none;" onchange="importSettingsBackup(event)">
+      </div>
+      <div class="settings-row" style="padding-top:2px;">
+        <span class="settings-sub">API 키·노션 토큰·프롬프트를 JSON 파일로 저장/복원합니다. 브라우저 저장소가 초기화돼도 이 파일로 즉시 복구할 수 있습니다. 파일에는 키가 평문으로 담기니 안전한 곳에 보관하세요.</span>
+      </div>
+    </div>
+
     <div class="settings-section-title">API 키</div>
     <div class="settings-card">
       <div class="settings-row">
@@ -1638,6 +1652,53 @@ function saveSettings() {
   showToast('설정이 저장됐습니다');
 }
 
+// ── 설정 백업 (내보내기 / 불러오기) ──
+function exportSettingsBackup() {
+  const backup = {
+    type: 'ai-workflow-settings-backup',
+    exportedAt: new Date().toISOString(),
+    config: config,
+    prompts: prompts,
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}`;
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `ai-workflow-settings-${stamp}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('설정을 파일로 내보냈습니다');
+}
+
+function importSettingsBackup(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if(data.config) {
+        Object.assign(config, data.config);
+        saveConfig(config);
+      }
+      if(data.prompts) {
+        Object.assign(prompts, data.prompts);
+        savePrompts(prompts);
+        loadPrompt();
+      }
+      openSettings();
+      showToast('백업 파일을 불러왔습니다');
+    } catch(e) {
+      showToast('불러오기 실패: 파일 형식을 확인해주세요');
+    } finally {
+      event.target.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
 // ── 토스트 ──
 let _toastTimer;
 function showToast(msg) {
@@ -1891,7 +1952,6 @@ async function manualNotionLog() {
   console.error=function(){var a=Array.prototype.slice.call(arguments);add(a.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);}).join(' '),'console','');_ce.apply(console,arguments);};
 })();
 </script>
-<div id="buildVersion" style="position:fixed;bottom:14px;left:16px;font-size:10px;color:rgba(255,255,255,0.85);font-family:monospace;z-index:8888;pointer-events:none;background:rgba(0,0,0,0.55);border:1px solid rgba(0,0,0,0.2);border-radius:20px;padding:3px 10px;letter-spacing:0.04em;">배포 —</div>
 <script>
 fetch('/version.json?_=' + Date.now())
   .then(r => r.json())
