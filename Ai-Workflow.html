@@ -1430,8 +1430,11 @@ async function callGemini({ prompt, images, imageLabels, model, imageSize, aspec
   // 참고용 이미지가 마지막에 오면 결과물이 참고 이미지 쪽으로 쏠리는 문제가 있었다.
   const ordered = images.map((img, i) => ({ img, label:(imageLabels && imageLabels[i]) || `참고 이미지 ${i+1}` })).reverse();
   const parts = [{ text:prompt }];
-  ordered.forEach(({ img, label }) => {
-    parts.push({ text:`[다음 이미지는 "${label}"이다]` });
+  ordered.forEach(({ img, label }, idx) => {
+    // 프롬프트 본문이 "#1.png", "#2.png" 식으로 이미지를 파일명으로 직접 지칭하는 경우가 많아,
+    // 라벨에 그 표기를 그대로 포함시켜 프롬프트의 지시와 실제 이미지가 확실히 연결되도록 한다.
+    const fileTag = `#${idx+1}.png`;
+    parts.push({ text:`[다음 이미지는 ${fileTag} 이며, "${label}"이다]` });
     parts.push({ inlineData:{ mimeType:img.mime, data:img.base64 } });
   });
   const tempNum = parseFloat(temperature);
