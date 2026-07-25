@@ -366,6 +366,10 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
         <span class="cut-number-lbl">컷번호</span>
         <input class="cut-number-m" id="cutNumber" type="text" placeholder="C-001">
       </div>
+      <div class="cut-number-card">
+        <span class="cut-number-lbl">적용 버전</span>
+        <input class="cut-number-m" id="promptVersion" type="text" placeholder="v6.0">
+      </div>
       <div class="fine-tune-card">
         <div class="fine-tune-inner">
           <span class="fine-tune-lbl">미세수정</span>
@@ -492,6 +496,10 @@ select.settings-sel{background:transparent;color:var(--text);border:none;font-si
     <div class="cut-number-card">
       <span class="cut-number-lbl">컷번호</span>
       <input class="cut-number-m" id="dCutNumber" type="text" placeholder="C-001">
+    </div>
+    <div class="cut-number-card">
+      <span class="cut-number-lbl">적용 버전</span>
+      <input class="cut-number-m" id="dPromptVersion" type="text" placeholder="v6.0">
     </div>
     <div class="fine-tune-card">
       <div class="fine-tune-inner">
@@ -834,6 +842,8 @@ function ctrl(mId, dId) {
 }
 function getCut() { return (document.getElementById(isDesktop()?'dCutNumber':'cutNumber')||{}).value||''; }
 function setAllCut(v) { ['cutNumber','dCutNumber'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=v; }); }
+function getPromptVersion() { return (document.getElementById(isDesktop()?'dPromptVersion':'promptVersion')||{}).value||''; }
+function setAllPromptVersion(v) { ['promptVersion','dPromptVersion'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=v; }); }
 function getAllFineTune() { return (document.getElementById(isDesktop()?'dFineTune':'fineTune')||{}).value||''; }
 function clearAllFineTune() { ['fineTune','dFineTune'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; }); }
 function setAllFineTune(v) { ['fineTune','dFineTune'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=v; }); }
@@ -1292,7 +1302,9 @@ function saveToGallery() {
 // ── 실행 ──
 async function runProcess() {
   const slots = PROCESS_CONFIG[currentProcess].slots;
-  const images = slots.map(s => slotData[currentProcess][s.id]).filter(Boolean);
+  const filledSlots = slots.filter(s => slotData[currentProcess][s.id]);
+  const images = filledSlots.map(s => slotData[currentProcess][s.id]);
+  const imageLabels = filledSlots.map(s => s.label);
   if(!images.length) { showToast('이미지를 하나 이상 선택해주세요'); return; }
 
   let prompt = prompts[currentProcess] || '';
@@ -1310,6 +1322,7 @@ async function runProcess() {
   const temperature = ctrl('tempSlider','dTempSlider');
   const retryMax    = parseInt(config.retryCount ?? 1);
   const cutNumber   = getCut();
+  const promptVersion = getPromptVersion();
 
   if(!cutNumber.trim()) {
     alert('컷번호를 입력해주세요.');
@@ -1332,7 +1345,7 @@ async function runProcess() {
     try {
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), 600000);
-      result = await callGemini({ prompt, images, model, imageSize, aspectRatio, temperature, apiKey, signal:controller.signal });
+      result = await callGemini({ prompt, images, imageLabels, model, imageSize, aspectRatio, temperature, apiKey, signal:controller.signal });
       clearTimeout(tid);
       if(result.success) break;
       lastErr = result.error || '실패';
@@ -1341,6 +1354,11 @@ async function runProcess() {
       lastErr = String(e);
     }
     retryCount++;
+    if(retryCount <= retryMax) {
+      const label = `재시도 대기 중 (${retryCount}/${retryMax})`;
+      setStatus('running', label);
+      await new Promise(r => setTimeout(r, 3000 * retryCount));
+    }
   }
 
   clearInterval(timerInterval);
@@ -1365,15 +1383,15 @@ async function runProcess() {
     const statRes = updateStat(true, parseFloat(elapsed));
     lastElapsed = parseFloat(elapsed);
     lastCost = { krw:statRes.costKrw, usd:statRes.costUsd };
-    addLogEntry({ type:'ok', proc:currentProcess, elapsed, model, cutNumber, costKrw:statRes.costKrw });
-    sendNotionLog({ status:'성공', elapsed, model, errDetail:'', costKrw:statRes.costKrw, costUsd:statRes.costUsd, cutNumber });
+    addLogEntry({ type:'ok', proc:currentProcess, elapsed, model, cutNumber, promptVersion, costKrw:statRes.costKrw });
+    sendNotionLog({ status:'성공', elapsed, model, errDetail:'', costKrw:statRes.costKrw, costUsd:statRes.costUsd, cutNumber, promptVersion });
     applyAutoLinks(currentProcess, lastResult);
     if(config.autoCutIncrement) autoIncrementCut();
   } else {
     setStatus('err', lastErr||'실패');
     updateStat(false, parseFloat(elapsed));
-    addLogEntry({ type:'err', proc:currentProcess, elapsed, model, cutNumber, costKrw:0 });
-    sendNotionLog({ status:'실패', elapsed, model, errDetail:lastErr||'', cutNumber });
+    addLogEntry({ type:'err', proc:currentProcess, elapsed, model, cutNumber, promptVersion, costKrw:0 });
+    sendNotionLog({ status:'실패', elapsed, model, errDetail:lastErr||'', cutNumber, promptVersion });
     showToast('실패: '+(lastErr||'알 수 없는 오류'));
   }
 }
@@ -1392,10 +1410,15 @@ function setBtnRunDisabled(v) {
   });
 }
 
-async function callGemini({ prompt, images, model, imageSize, aspectRatio, temperature, apiKey, signal }) {
+async function callGemini({ prompt, images, imageLabels, model, imageSize, aspectRatio, temperature, apiKey, signal }) {
   const parts = [{ text:prompt }];
-  images.forEach(img => parts.push({ inlineData:{ mimeType:img.mime, data:img.base64 } }));
-  const generationConfig = { responseModalities:['IMAGE','TEXT'], temperature:parseFloat(temperature)||1.0 };
+  images.forEach((img, i) => {
+    const label = (imageLabels && imageLabels[i]) || `참고 이미지 ${i+1}`;
+    parts.push({ text:`[다음 이미지는 "${label}"이다]` });
+    parts.push({ inlineData:{ mimeType:img.mime, data:img.base64 } });
+  });
+  const tempNum = parseFloat(temperature);
+  const generationConfig = { responseModalities:['IMAGE','TEXT'], temperature: Number.isNaN(tempNum) ? 1.0 : tempNum };
   if(imageSize || aspectRatio) {
     generationConfig.imageConfig = {};
     if(imageSize) generationConfig.imageConfig.imageSize = imageSize;
@@ -1456,11 +1479,12 @@ function showResult(inputImg, result, elapsed, model) {
 }
 
 // ── 이력 ──
-function addLogEntry({ type, proc, elapsed, model, cutNumber, costKrw }) {
+function addLogEntry({ type, proc, elapsed, model, cutNumber, promptVersion, costKrw }) {
   const now = new Date();
   const entry = {
     type, proc, elapsed, model,
     cutNumber: cutNumber||'',
+    promptVersion: promptVersion||'',
     costKrw: costKrw||0,
     time: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
     date: `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`,
@@ -1491,7 +1515,7 @@ function renderLogHistory() {
         : '';
       item.innerHTML = `
         <div class="log-item-top">
-          <span class="log-item-proc">${procLabel}${entry.cutNumber?' · '+entry.cutNumber:''}</span>
+          <span class="log-item-proc">${procLabel}${entry.cutNumber?' · '+entry.cutNumber:''}${entry.promptVersion?' · '+entry.promptVersion:''}</span>
           <span class="log-item-status ${entry.type}">${entry.type==='ok'?'✓ 성공':'✗ 실패'}</span>
         </div>
         <div class="log-item-bottom">
@@ -1627,7 +1651,7 @@ function showToast(msg) {
 // ── 노션 로그 ──
 const NOTION_DS_ID = '45011fe3-2735-4ebb-a67f-32f3534b579c';
 
-async function sendNotionLog({ status, elapsed, model, errDetail, costKrw=0, costUsd=0, evalResult, rating, isEval, cutNumber }) {
+async function sendNotionLog({ status, elapsed, model, errDetail, costKrw=0, costUsd=0, evalResult, rating, isEval, cutNumber, promptVersion }) {
   const key = config.notionKey;
   if(!key) return;
   const now = new Date();
@@ -1650,6 +1674,7 @@ async function sendNotionLog({ status, elapsed, model, errDetail, costKrw=0, cos
     '비용(USD)':    { number:costUsd },
   };
   if(cutNumber)   properties['컷번호']  = { rich_text:[{ text:{ content:cutNumber } }] };
+  if(promptVersion) properties['프롬프트버전'] = { rich_text:[{ text:{ content:promptVersion } }] };
   if(rating!=null) properties['별점']   = { number:rating };
   if(evalResult)  properties['평가결과'] = { select:{ name:evalResult==='pass'?'Pass':'Fail' } };
 
