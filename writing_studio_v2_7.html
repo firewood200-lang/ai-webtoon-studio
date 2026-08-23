@@ -1967,7 +1967,7 @@ function openLLMSettings(){
             <p style="font-size:10px;color:#666;margin:0">채팅 위젯에서 워크스페이스를 고르고 자료를 올리려면 여기에 입력하세요. 위 기본 연결과 별개로 동작해서, 검색 필터는 Ollama로 두고 이 워크스페이스 채팅만 AnythingLLM으로 써도 됩니다 — 한 번 입력해두면 계속 안 바꿔도 됩니다.</p>
             <input id="llm-anythingllm-url" type="text" placeholder="http://localhost:3001"
               style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none"
-              value="${esc(wsLLM.anythingllmUrl||'')}">
+              value="${esc(wsLLM.anythingllmUrl||'http://localhost:3001')}">
             <input id="llm-anythingllm-key" type="password" placeholder="API 키 (설정 > 도구 > 개발자 API에서 발급)"
               style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none"
               value="${esc(wsLLM.anythingllmKey||'')}">
@@ -1985,7 +1985,7 @@ function openLLMSettings(){
     document.getElementById('llm-endpoint').value = wsLLM.endpoint||'http://localhost:11434/v1/chat/completions';
     document.getElementById('llm-apikey').value = wsLLM.apiKey||'';
     document.getElementById('llm-model').value = wsLLM.model||'';
-    document.getElementById('llm-anythingllm-url').value = wsLLM.anythingllmUrl||'';
+    document.getElementById('llm-anythingllm-url').value = wsLLM.anythingllmUrl||'http://localhost:3001';
     document.getElementById('llm-anythingllm-key').value = wsLLM.anythingllmKey||'';
     document.getElementById('llm-test-status').textContent='';
     syncLLMPresetUI();
