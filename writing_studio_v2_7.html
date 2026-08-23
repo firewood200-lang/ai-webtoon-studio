@@ -230,7 +230,12 @@ header input{width:190px}
   <div class="card" id="llmChatWidget" style="margin-top:12px;display:none;flex-direction:column;flex:1;min-height:260px">
     <div class="section-title">🖥 로컬 AI 채팅</div>
     <div style="display:flex;gap:4px;margin-bottom:8px">
-      <select id="llmWorkspaceSelect" style="flex:1;font-size:12px;padding:5px 7px;display:none" onchange="wsLLM.chatWorkspace=this.value;saveWsLLM();"></select>
+      <div id="llmWorkspaceWrap" style="position:relative;flex:1;display:none">
+        <button type="button" id="llmWorkspaceBtn" onclick="toggleLLMWorkspaceList(event)" style="width:100%;text-align:left;font-size:12px;padding:5px 7px;background:#fff;border:1px solid var(--line);border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:4px">
+          <span id="llmWorkspaceBtnLabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">워크스페이스 선택</span><span style="flex-shrink:0;color:var(--muted)">▾</span>
+        </button>
+        <div id="llmWorkspaceListPanel" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:30;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:var(--shadow)"></div>
+      </div>
       <button id="llmChatUploadBtn" onclick="triggerLLMChatUpload()" title="선택한 워크스페이스에 자료 업로드" style="font-size:12px;padding:5px 9px;display:none">📎</button>
       <input type="file" id="llmChatFileInput" style="display:none" onchange="uploadLLMChatFile()">
     </div>
@@ -1855,16 +1860,28 @@ function applyLLMPreset(name){
   if(!p){ if(hintEl) hintEl.textContent = LLM_PRESET_DEFAULT_HINT; return; }
   endpointEl.value = p.url;
   if(hintEl) hintEl.textContent = p.hint;
+  highlightLLMPresetButton(name);
 }
 
-// 저장된 엔드포인트 URL이 프리셋 중 하나와 일치하면 "빠른 선택" 드롭다운도 그 값으로 맞춰줌.
-// 이걸 안 하면 저장은 잘 되는데 모달을 다시 열 때마다 드롭다운만 "직접 입력"으로 보여서
+// 원래 <select> 드롭다운이었는데, 일부 환경(윈도우 다크테마·특정 브라우저 조합)에서
+// 네이티브 select 팝업이 클릭에 반응하지 않는다는 신고가 있어 버튼 3개로 교체함(2026-08-23).
+// 팝업 레이어 자체가 없으니 그 종류의 문제에서 원천적으로 자유로움.
+function highlightLLMPresetButton(name){
+  document.querySelectorAll('#llm-preset-buttons button').forEach(btn=>{
+    const active = btn.dataset.preset === name;
+    btn.style.background = active ? '#c8a96e' : '#2a2721';
+    btn.style.color = active ? '#1a1714' : '#e8e0d0';
+    btn.style.fontWeight = active ? '700' : '400';
+  });
+}
+
+// 저장된 엔드포인트 URL이 프리셋 중 하나와 일치하면 "빠른 선택" 버튼도 그 값으로 맞춰줌.
+// 이걸 안 하면 저장은 잘 되는데 모달을 다시 열 때마다 버튼 강조가 풀려서
 // 설정이 초기화된 것처럼 보이는 문제가 생김.
 function syncLLMPresetUI(){
-  const presetEl = document.getElementById('llm-preset');
   const hintEl = document.getElementById('llm-preset-hint');
   const matched = Object.keys(LLM_PRESETS).find(k => LLM_PRESETS[k].url === (wsLLM.endpoint||'')) || '';
-  if(presetEl) presetEl.value = matched;
+  highlightLLMPresetButton(matched);
   if(hintEl) hintEl.textContent = matched ? LLM_PRESETS[matched].hint : LLM_PRESET_DEFAULT_HINT;
 }
 
@@ -1915,13 +1932,11 @@ function openLLMSettings(){
           </label>
           <div style="display:flex;flex-direction:column;gap:6px">
             <label style="font-size:11px;color:#888;font-weight:600">빠른 선택</label>
-            <select id="llm-preset" onchange="applyLLMPreset(this.value)"
-              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
-              <option value="">직접 입력</option>
-              <option value="ollama">Ollama</option>
-              <option value="lmstudio">LM Studio</option>
-              <option value="anythingllm">AnythingLLM</option>
-            </select>
+            <div id="llm-preset-buttons" style="display:flex;gap:6px;flex-wrap:wrap">
+              <button type="button" data-preset="ollama" onclick="applyLLMPreset('ollama')" style="flex:1;min-width:70px;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 6px;font-size:12px;font-family:inherit;cursor:pointer">Ollama</button>
+              <button type="button" data-preset="lmstudio" onclick="applyLLMPreset('lmstudio')" style="flex:1;min-width:70px;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 6px;font-size:12px;font-family:inherit;cursor:pointer">LM Studio</button>
+              <button type="button" data-preset="anythingllm" onclick="applyLLMPreset('anythingllm')" style="flex:1;min-width:70px;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 6px;font-size:12px;font-family:inherit;cursor:pointer">AnythingLLM</button>
+            </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:6px">
             <label style="font-size:11px;color:#888;font-weight:600">채팅 API 엔드포인트 URL</label>
@@ -2047,28 +2062,77 @@ async function fetchLLMWorkspaces(){
   return Array.isArray(data.workspaces) ? data.workspaces : [];
 }
 
+// 원래 <select>였는데, 설정 모달의 "빠른 선택"과 같은 이유(일부 환경에서 네이티브 드롭다운
+// 팝업이 클릭에 반응 안 하는 문제)로 버튼 목록을 여닫는 커스텀 드롭다운으로 교체함(2026-08-23).
+let llmWorkspaceListCache = []; // {slug, name} — 패널 다시 그릴 때(선택 반영) 재사용
+function llmWorkspaceLabel(slug){
+  if(!slug) return '(워크스페이스 없이 대화)';
+  const w = llmWorkspaceListCache.find(w => w.slug === slug);
+  return w ? (w.name || w.slug) : slug;
+}
+function renderLLMWorkspacePanel(){
+  const panel = document.getElementById('llmWorkspaceListPanel');
+  if(!panel) return;
+  const rows = [{slug:'', name:'(워크스페이스 없이 대화)'}, ...llmWorkspaceListCache];
+  panel.innerHTML = '';
+  rows.forEach(w=>{
+    const div = document.createElement('div');
+    const isCurrent = w.slug === (wsLLM.chatWorkspace||'');
+    div.textContent = w.name || w.slug || '(워크스페이스 없이 대화)';
+    div.style.cssText = `padding:7px 9px;font-size:12px;cursor:pointer;background:${isCurrent?'#f2ece0':'#fff'};font-weight:${isCurrent?700:400}`;
+    div.onmouseenter = ()=>{ if(!isCurrent) div.style.background='#f8f3e9'; };
+    div.onmouseleave = ()=>{ if(!isCurrent) div.style.background='#fff'; };
+    div.onclick = ()=> selectLLMWorkspace(w.slug);
+    panel.appendChild(div);
+  });
+}
+function toggleLLMWorkspaceList(e){
+  if(e) e.stopPropagation();
+  const panel = document.getElementById('llmWorkspaceListPanel');
+  if(!panel) return;
+  const opening = panel.style.display === 'none';
+  if(opening) renderLLMWorkspacePanel();
+  panel.style.display = opening ? 'block' : 'none';
+}
+function selectLLMWorkspace(slug){
+  wsLLM.chatWorkspace = slug || '';
+  saveWsLLM();
+  const labelEl = document.getElementById('llmWorkspaceBtnLabel');
+  if(labelEl) labelEl.textContent = llmWorkspaceLabel(wsLLM.chatWorkspace);
+  const panel = document.getElementById('llmWorkspaceListPanel');
+  if(panel) panel.style.display = 'none';
+}
+document.addEventListener('click', e=>{
+  const wrap = document.getElementById('llmWorkspaceWrap');
+  if(wrap && !wrap.contains(e.target)){
+    const panel = document.getElementById('llmWorkspaceListPanel');
+    if(panel) panel.style.display = 'none';
+  }
+});
+
 async function refreshLLMWorkspaceOptions(){
-  const sel = document.getElementById('llmWorkspaceSelect');
+  const wrap = document.getElementById('llmWorkspaceWrap');
+  const labelEl = document.getElementById('llmWorkspaceBtnLabel');
   const uploadBtn = document.getElementById('llmChatUploadBtn');
-  if(!sel) return;
+  if(!wrap) return;
   const base = getAnythingLLMBase();
   if(!base){
-    sel.style.display = 'none';
+    wrap.style.display = 'none';
     if(uploadBtn) uploadBtn.style.display = 'none';
     return;
   }
-  sel.style.display = '';
+  wrap.style.display = '';
   if(uploadBtn) uploadBtn.style.display = '';
-  sel.innerHTML = '<option value="">워크스페이스 불러오는 중…</option>';
+  if(labelEl) labelEl.textContent = '워크스페이스 불러오는 중…';
   try{
     const list = await fetchLLMWorkspaces();
+    llmWorkspaceListCache = list;
     const keep = wsLLM.chatWorkspace && list.some(w => w.slug === wsLLM.chatWorkspace) ? wsLLM.chatWorkspace : '';
-    sel.innerHTML = '<option value="">(워크스페이스 없이 대화)</option>' +
-      list.map(w => `<option value="${esc(w.slug)}">${esc(w.name || w.slug)}</option>`).join('');
-    sel.value = keep;
     wsLLM.chatWorkspace = keep;
+    if(labelEl) labelEl.textContent = llmWorkspaceLabel(keep);
   }catch(e){
-    sel.innerHTML = '<option value="">⚠ 목록 로드 실패</option>';
+    llmWorkspaceListCache = [];
+    if(labelEl) labelEl.textContent = '⚠ 목록 로드 실패';
   }
 }
 
