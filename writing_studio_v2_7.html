@@ -24,7 +24,7 @@ textarea{resize:none;outline:none}
 header{grid-column:1/5;display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);background:#eae2d4}
 header h1{font-size:17px;margin:0 10px 0 0;white-space:nowrap}
 header input{width:190px}
-.sidebar{grid-row:2;background:var(--panel2);border-right:1px solid var(--line);overflow:auto;padding:12px}
+.sidebar{grid-row:2;background:var(--panel2);border-right:1px solid var(--line);overflow:auto;padding:12px;display:flex;flex-direction:column}
 .workspace{grid-row:2;display:grid;grid-template-rows:auto 1fr;min-width:0;overflow:hidden}
 .library{grid-row:2;background:var(--panel2);border-left:1px solid var(--line);display:grid;grid-template-rows:48px 260px 8px 1fr 8px 180px;min-width:0;overflow:hidden}
 .section-title{font-size:12px;color:var(--muted);font-weight:700;margin:12px 0 8px;display:flex;justify-content:space-between;align-items:center}
@@ -87,6 +87,8 @@ header input{width:190px}
 .stat{background:#f2eadc;border-radius:10px;text-align:center;padding:9px}
 .stat b{display:block;font-size:18px}
 .small{font-size:12px;color:var(--muted)}
+@keyframes llmWaitPulse{0%,100%{opacity:1}50%{opacity:.35}}
+.llm-waiting-pulse{animation:llmWaitPulse 1.1s ease-in-out infinite}
 .search-result{padding:8px;border-bottom:1px solid var(--line);cursor:pointer}
 .search-result:hover{background:#eee5d7}
 .lib-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);background:#e9dfcf}
@@ -170,10 +172,13 @@ header input{width:190px}
       <button class="admin-menu-item" onclick="adminExportJSON()">💾 JSON 백업 저장</button>
       <button class="admin-menu-item" onclick="adminImport()">📂 JSON 불러오기</button>
       <div class="admin-menu-sep"></div>
+      <button class="admin-menu-item" onclick="document.getElementById('adminDropdown').classList.remove('open');openLLMSettings()">🖥 로컬 AI 설정</button>
+      <div class="admin-menu-sep"></div>
       <button class="admin-menu-item danger" onclick="adminReset()">🗑 전체 초기화</button>
     </div>
   </div>
-  <input id="searchInput" placeholder="검색" oninput="runSearch()">
+  <input id="searchInput" placeholder="검색" oninput="searchOverride=null;runSearch()">
+  <button id="searchAIBtn" onclick="runSearchAI()" title="검색 결과를 로컬 AI로 관련성 필터링" style="display:none">🖥 관련 문서만</button>
   <input id="fileInput" class="hidden" type="file" accept=".json" onchange="importJSON(event)">
   <div class="ws-last-used">마지막 사용<br><span id="lastUsedBadge">처음 실행</span></div>
   <button class="btn-exit-ws" onclick="openExitModal()" title="종료 확인">✕ 종료</button>
@@ -221,6 +226,20 @@ header input{width:190px}
 
   <div class="section-title">검색 결과</div>
   <div id="searchResults" class="small">검색어를 입력하세요.</div>
+
+  <div class="card" id="llmChatWidget" style="margin-top:12px;display:none;flex-direction:column;flex:1;min-height:260px">
+    <div class="section-title">🖥 로컬 AI 채팅</div>
+    <div style="display:flex;gap:4px;margin-bottom:8px">
+      <select id="llmWorkspaceSelect" style="flex:1;font-size:12px;padding:5px 7px;display:none" onchange="wsLLM.chatWorkspace=this.value;saveWsLLM();"></select>
+      <button id="llmChatUploadBtn" onclick="triggerLLMChatUpload()" title="선택한 워크스페이스에 자료 업로드" style="font-size:12px;padding:5px 9px;display:none">📎</button>
+      <input type="file" id="llmChatFileInput" style="display:none" onchange="uploadLLMChatFile()">
+    </div>
+    <div id="llmChatMessages" style="flex:1;min-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:4px">
+      <input id="llmChatInput" placeholder="메시지 입력" style="flex:1;font-size:14px;padding:9px 11px" onkeydown="if(event.key==='Enter'&&!event.isComposing)sendLLMChat()">
+      <button id="llmChatSendBtn" onclick="sendLLMChat()" style="font-size:14px;padding:9px 15px">전송</button>
+    </div>
+  </div>
 </aside>
 
 <main class="workspace">
@@ -803,7 +822,8 @@ VPA 추적요원들이 들이닥치며 남혁이 최초 목격자가 되는 것�
   <div class="lib-head">
     <b>대형 자료실</b>
     <div style="display:flex;align-items:center;gap:6px">
-      <input id="resourceSearch" placeholder="자료 검색" style="width:120px;height:26px;font-size:12px;padding:3px 8px" oninput="runResourceSearch()">
+      <input id="resourceSearch" placeholder="자료 검색" style="width:120px;height:26px;font-size:12px;padding:3px 8px" oninput="resourceSearchOverride=null;runResourceSearch()">
+      <button id="resourceSearchAIBtn" onclick="runResourceSearchAI()" title="검색 결과를 로컬 AI로 관련성 필터링" style="display:none;height:26px;font-size:11px;padding:3px 8px;white-space:nowrap">🖥 관련 자료만</button>
       <button id="libEditToggle" onclick="toggleLibEditor()" style="height:26px;font-size:11px;padding:3px 8px;white-space:nowrap">▾ 편집칸</button>
     </div>
   </div>
@@ -1327,10 +1347,23 @@ function resourcePreviewText(body){
 function resourceDisplayTitle(title){
   return (title||"").replace(/^(\[[^\]]+\])\s*\[[^\]]+\]\s*/,"$1 ").trim();
 }
+let resourceSearchOverride = null; // AI 필터가 걸러준 결과(id 목록). null이면 기본 키워드 필터 사용.
+
 function runResourceSearch(){
   const q=(document.getElementById("resourceSearch")?.value||"").trim().toLowerCase();
   const list=document.getElementById("resourceList"); list.innerHTML="";
-  const filtered=q ? state.resources.filter(r=>[r.title,r.body,r.memo].join(" ").toLowerCase().includes(q)) : state.resources;
+  let filtered=q ? state.resources.filter(r=>[r.title,r.body,r.memo].join(" ").toLowerCase().includes(q)) : state.resources;
+  if(resourceSearchOverride){
+    const idSet=new Set(resourceSearchOverride);
+    filtered=filtered.filter(r=>idSet.has(r.id));
+  }
+  renderResourceList(filtered);
+  renderResourceEditor();
+}
+
+function renderResourceList(filtered){
+  const list=document.getElementById("resourceList");
+  list.innerHTML="";
   filtered.forEach(r=>{
     const div=document.createElement("div");
     div.className="lib-item"+(r.id===state.currentResourceId?" active":"");
@@ -1340,7 +1373,22 @@ function runResourceSearch(){
     list.appendChild(div);
   });
   if(filtered.length===0) list.innerHTML=`<div class="small" style="padding:8px">결과 없음</div>`;
-  renderResourceEditor();
+}
+
+async function runResourceSearchAI(){
+  const q=(document.getElementById("resourceSearch")?.value||"").trim();
+  if(!q){ showToast('검색어를 먼저 입력하세요.'); return; }
+  resourceSearchOverride = null;
+  const q_lc = q.toLowerCase();
+  const candidates = state.resources
+    .filter(r=>[r.title,r.body,r.memo].join(" ").toLowerCase().includes(q_lc))
+    .map(r=>({id:r.id, title:resourceDisplayTitle(r.title), preview:resourcePreviewText(r.body)}));
+  if(!candidates.length){ runResourceSearch(); return; }
+  const list=document.getElementById("resourceList");
+  list.innerHTML=`<div class="small" style="padding:8px">🖥 관련 자료 추리는 중…</div>`;
+  const filtered = await filterRelevantByLLM(q, candidates);
+  resourceSearchOverride = filtered.map(c=>c.id);
+  runResourceSearch();
 }
 function renderResources(){runResourceSearch();}
 function currentResource(){return state.resources.find(r=>r.id===state.currentResourceId)||null}
@@ -1376,11 +1424,22 @@ function copyResource(){
     navigator.clipboard.writeText(text).then(()=>showToast("복사 완료")).catch(fallback);
   }else{fallback()}
 }
+let searchOverride = null; // AI 필터가 걸러준 결과(id 목록). null이면 기본 키워드 필터 사용.
+
 function runSearch(){
   const q=document.getElementById("searchInput").value.trim().toLowerCase();
   const box=document.getElementById("searchResults");
   if(!q){box.innerHTML="검색어를 입력하세요.";return}
-  const results=state.nodes.filter(n=>[n.title,n.body,n.memo,n.kind].join(" ").toLowerCase().includes(q));
+  let results=state.nodes.filter(n=>[n.title,n.body,n.memo,n.kind].join(" ").toLowerCase().includes(q));
+  if(searchOverride){
+    const idSet=new Set(searchOverride);
+    results=results.filter(n=>idSet.has(n.id));
+  }
+  renderSearchResults(results);
+}
+
+function renderSearchResults(results){
+  const box=document.getElementById("searchResults");
   box.innerHTML=results.length?"":"결과 없음";
   results.forEach(n=>{
     const div=document.createElement("div"); div.className="search-result";
@@ -1388,6 +1447,22 @@ function runSearch(){
     div.onclick=()=>{assignToPane(n);saveLocal();render()};
     box.appendChild(div);
   });
+}
+
+async function runSearchAI(){
+  const q=(document.getElementById("searchInput")?.value||"").trim();
+  if(!q){ showToast('검색어를 먼저 입력하세요.'); return; }
+  searchOverride = null;
+  const q_lc = q.toLowerCase();
+  const candidates = state.nodes
+    .filter(n=>[n.title,n.body,n.memo,n.kind].join(" ").toLowerCase().includes(q_lc))
+    .map(n=>({id:n.id, title:n.title, preview:(n.body||n.memo||"")}));
+  if(!candidates.length){ runSearch(); return; }
+  const box=document.getElementById("searchResults");
+  box.innerHTML=`🖥 관련 문서 추리는 중…`;
+  const filtered = await filterRelevantByLLM(q, candidates);
+  searchOverride = filtered.map(c=>c.id);
+  runSearch();
 }
 async function exportJSON(){
   const json = JSON.stringify(state, null, 2);
@@ -1680,9 +1755,433 @@ function initEditorSplitters(){
 let projListOpen=false;
 function render(){
   document.getElementById("projectTitle").value=state.title;
-  renderTree(); renderDocbar(); renderModeButtons(); renderEditors(); renderStats(); renderResources(); runSearch(); initAppSplitters(); initLibrarySplitters();
+  renderTree(); renderDocbar(); renderModeButtons(); renderEditors(); renderStats(); renderResources(); runSearch(); initAppSplitters(); initLibrarySplitters(); renderAIFilterButtons();
   if(projListOpen) renderProjectList();
 }
+// ── 로컬 AI(Ollama/LM Studio/AnythingLLM 등 OpenAI 호환 서버) 연동 — 관련성 검색 전용 ──
+// 도구마다 엔드포인트 경로·인증 방식이 다름(Ollama·LM Studio는 보통 인증 없이 /v1/chat/completions,
+// AnythingLLM은 /api/v1/openai/chat/completions + Authorization: Bearer <키> 필요)이라
+// baseUrl 자동 조합 대신 사용자가 전체 엔드포인트 URL을 직접 입력하는 방식으로 둠.
+const WS_LLM_KEY = 'ws_llm_settings';
+let wsLLM = (()=>{
+  const DEFAULT = {enabled:false, endpoint:'http://localhost:11434/v1/chat/completions', apiKey:'', model:'', chatWorkspace:'', anythingllmUrl:'', anythingllmKey:''};
+  try{
+    const saved = JSON.parse(localStorage.getItem(WS_LLM_KEY)||'{}');
+    // 이전 버전 호환: baseUrl만 있고 endpoint가 없으면 Ollama/LM Studio 방식으로 변환
+    if(saved.baseUrl && !saved.endpoint){
+      saved.endpoint = saved.baseUrl.replace(/\/+$/,'') + '/v1/chat/completions';
+      delete saved.baseUrl;
+    }
+    return Object.assign({}, DEFAULT, saved);
+  }catch(e){ return DEFAULT; }
+})();
+
+function saveWsLLM(){localStorage.setItem(WS_LLM_KEY, JSON.stringify(wsLLM));}
+
+function llmAuthHeaders(){
+  const h = { 'Content-Type': 'application/json' };
+  if(wsLLM.apiKey) h['Authorization'] = `Bearer ${wsLLM.apiKey}`;
+  return h;
+}
+
+// 단일 호출부 — 모든 로컬 LLM 요청이 여길 거침(원칙 10: API 호출부 함수 분리)
+// 로컬 LLM은 응답이 느릴 수 있어(특히 생각 모드) 무한정 기다리지 않도록 제한시간을 두고,
+// 시간 초과 시 "멈춘 건지 알 수 없는" 상태 대신 분명한 에러 메시지로 이어지게 한다.
+const LLM_FETCH_TIMEOUT_MS = 600000; // 10분 — 자료실 자료가 많은 워크스페이스는 RAG 검색+긴 컨텍스트 처리로 오래 걸릴 수 있어 넉넉하게 잡음. 진행 중임은 대기 표시(깜빡임+경과초)로 보여주므로, 이 값은 "느림"이 아니라 "완전히 멈춤"만 걸러내는 안전장치로 취급.
+async function fetchWithTimeout(url, options, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), timeoutMs ?? LLM_FETCH_TIMEOUT_MS);
+  try{
+    return await fetch(url, Object.assign({}, options, {signal: controller.signal}));
+  }catch(e){
+    if(e.name === 'AbortError'){
+      throw new Error(`응답이 ${Math.round((timeoutMs ?? LLM_FETCH_TIMEOUT_MS)/1000)}초 넘게 오지 않아 요청을 중단했습니다. 서버가 멈췄거나 응답이 너무 느립니다.`);
+    }
+    throw e;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+async function callLocalLLM(messages, options = {}){
+  if(!wsLLM.enabled) throw new Error('로컬 AI가 비활성화되어 있습니다. ⚙ 관리자 → 로컬 AI 설정에서 켜주세요.');
+  const endpoint = (wsLLM.endpoint||'').trim();
+  if(!endpoint) throw new Error('로컬 AI 엔드포인트 URL이 설정되어 있지 않습니다.');
+  let res;
+  try{
+    res = await fetchWithTimeout(endpoint, {
+      method: 'POST',
+      headers: llmAuthHeaders(),
+      body: JSON.stringify({
+        model: wsLLM.model || undefined,
+        messages,
+        temperature: options.temperature ?? 0.2,
+        stream: false
+      })
+    });
+  }catch(e){
+    if(e.message && e.message.includes('넘게 오지 않아')) throw e;
+    throw new Error('로컬 AI 서버에 연결할 수 없습니다. Ollama/LM Studio/AnythingLLM 등이 실행 중인지 확인해주세요.');
+  }
+  if(res.status===401 || res.status===403) throw new Error(`로컬 AI 인증 실패 (${res.status}) — API 키를 확인해주세요.`);
+  if(!res.ok) throw new Error(`로컬 AI 호출 실패 (${res.status})`);
+  const data = await res.json().catch(()=>null);
+  const content = data?.choices?.[0]?.message?.content;
+  if(content==null) throw new Error('로컬 AI 응답 형식을 해석할 수 없습니다.');
+  return stripThinkTags(content);
+}
+
+// qwen3 등 "생각 모드"가 있는 모델은 응답 안에 <think>...</think>로 감싼 추론 과정을
+// 그대로 섞어 보냄. 사용자가 보는 답변에는 필요 없는 내용이라 항상 제거하고 반환한다.
+function stripThinkTags(text){
+  if(typeof text !== 'string') return text;
+  let out = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  out = out.replace(/<think>[\s\S]*$/i, ''); // 닫는 태그 없이 잘려서 온 경우 방어적으로 처리
+  return out.trim();
+}
+
+const LLM_PRESETS = {
+  ollama: {url:'http://localhost:11434/v1/chat/completions', hint:'Ollama — 기본적으로 API 키가 필요 없습니다.'},
+  lmstudio: {url:'http://localhost:1234/v1/chat/completions', hint:'LM Studio — 기본적으로 API 키가 필요 없습니다.'},
+  anythingllm: {url:'http://localhost:3001/api/v1/openai/chat/completions', hint:'AnythingLLM — 설정 > 도구 > 개발자 API에서 발급한 API 키를 아래에 입력해야 합니다.'}
+};
+const LLM_PRESET_DEFAULT_HINT = 'Ollama http://localhost:11434/v1/chat/completions · LM Studio http://localhost:1234/v1/chat/completions · AnythingLLM http://localhost:3001/api/v1/openai/chat/completions(API 키 필요)';
+
+function applyLLMPreset(name){
+  const endpointEl = document.getElementById('llm-endpoint');
+  const hintEl = document.getElementById('llm-preset-hint');
+  if(!endpointEl) return;
+  const p = LLM_PRESETS[name];
+  if(!p){ if(hintEl) hintEl.textContent = LLM_PRESET_DEFAULT_HINT; return; }
+  endpointEl.value = p.url;
+  if(hintEl) hintEl.textContent = p.hint;
+}
+
+// 저장된 엔드포인트 URL이 프리셋 중 하나와 일치하면 "빠른 선택" 드롭다운도 그 값으로 맞춰줌.
+// 이걸 안 하면 저장은 잘 되는데 모달을 다시 열 때마다 드롭다운만 "직접 입력"으로 보여서
+// 설정이 초기화된 것처럼 보이는 문제가 생김.
+function syncLLMPresetUI(){
+  const presetEl = document.getElementById('llm-preset');
+  const hintEl = document.getElementById('llm-preset-hint');
+  const matched = Object.keys(LLM_PRESETS).find(k => LLM_PRESETS[k].url === (wsLLM.endpoint||'')) || '';
+  if(presetEl) presetEl.value = matched;
+  if(hintEl) hintEl.textContent = matched ? LLM_PRESETS[matched].hint : LLM_PRESET_DEFAULT_HINT;
+}
+
+// 연결 테스트: 실제로 아주 짧은 대화 요청을 한 번 보내봐서 확인.
+// 도구마다 모델 목록 엔드포인트 경로가 다 달라서(/v1/models가 없는 경우도 있음)
+// 실제 쓰일 채팅 완성 엔드포인트로 바로 검증하는 게 더 정확함.
+async function testLocalLLMConnection(){
+  const statusEl = document.getElementById('llm-test-status');
+  if(statusEl) statusEl.textContent = '연결 확인 중…';
+  const endpoint = (document.getElementById('llm-endpoint')?.value||'').trim();
+  const apiKey = (document.getElementById('llm-apikey')?.value||'').trim();
+  const model = (document.getElementById('llm-model')?.value||'').trim();
+  if(!endpoint){ if(statusEl) statusEl.textContent='⚠ 엔드포인트 URL을 입력하세요.'; return; }
+  const headers = { 'Content-Type': 'application/json' };
+  if(apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+  try{
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: model || undefined, messages:[{role:'user', content:'ping'}], stream:false, temperature:0 })
+    });
+    if(res.status===401 || res.status===403){ if(statusEl) statusEl.textContent = `⚠ 인증 실패 (${res.status}) — API 키를 확인하세요.`; return; }
+    if(!res.ok){ if(statusEl) statusEl.textContent = `⚠ 연결 실패 (${res.status})`; return; }
+    const data = await res.json().catch(()=>({}));
+    const ok = data?.choices?.[0]?.message?.content != null;
+    if(statusEl) statusEl.textContent = ok ? '✅ 연결 성공 — 응답 확인됨' : '⚠ 응답은 왔지만 형식을 해석할 수 없습니다.';
+  }catch(e){
+    if(statusEl) statusEl.textContent = '⚠ 연결할 수 없습니다. 서버가 실행 중인지, URL이 맞는지 확인해주세요.';
+  }
+}
+
+function openLLMSettings(){
+  let el = document.getElementById('llm-modal');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'llm-modal';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    el.innerHTML = `
+      <div style="background:#1e1c19;border:1px solid #3a3530;border-radius:12px;width:100%;max-width:420px;max-height:88vh;display:flex;flex-direction:column;">
+        <div style="padding:14px 18px;border-bottom:1px solid #3a3530;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+          <span style="font-size:12px;color:#c8a96e;font-weight:700;letter-spacing:.08em">🖥 로컬 AI 설정</span>
+          <button onclick="closeLLMSettings()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px">✕</button>
+        </div>
+        <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;flex:1">
+          <p style="font-size:11px;color:#888;margin:0">Ollama·LM Studio·AnythingLLM 등 OpenAI 호환 서버에 연결해 자료실·문서트리 검색 결과를 관련성으로 걸러줍니다. 완전히 오프라인·무료로 동작합니다.</p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#e8e0d0">
+            <input id="llm-enabled" type="checkbox" ${wsLLM.enabled?'checked':''}> 로컬 AI 사용
+          </label>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#888;font-weight:600">빠른 선택</label>
+            <select id="llm-preset" onchange="applyLLMPreset(this.value)"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+              <option value="">직접 입력</option>
+              <option value="ollama">Ollama</option>
+              <option value="lmstudio">LM Studio</option>
+              <option value="anythingllm">AnythingLLM</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#888;font-weight:600">채팅 API 엔드포인트 URL</label>
+            <input id="llm-endpoint" type="text" placeholder="http://localhost:11434/v1/chat/completions"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none"
+              value="${esc(wsLLM.endpoint||'http://localhost:11434/v1/chat/completions')}">
+            <div id="llm-preset-hint" style="font-size:10px;color:#666">Ollama http://localhost:11434/v1/chat/completions · LM Studio http://localhost:1234/v1/chat/completions · AnythingLLM http://localhost:3001/api/v1/openai/chat/completions(API 키 필요)</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#888;font-weight:600">API 키 (필요한 경우만 — 예: AnythingLLM)</label>
+            <input id="llm-apikey" type="password" placeholder="비워두면 인증 없이 요청"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none"
+              value="${esc(wsLLM.apiKey||'')}">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#888;font-weight:600">모델명</label>
+            <input id="llm-model" type="text" placeholder="예: qwen2.5:14b, qwen3:8b"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none"
+              value="${esc(wsLLM.model||'')}">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button onclick="testLocalLLMConnection()" style="background:#3a3020;color:#c8a96e;border:1px solid #c8a96e;border-radius:6px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">연결 테스트</button>
+            <div id="llm-test-status" style="font-size:11px;color:#888;flex:1"></div>
+          </div>
+
+          <div style="border-top:1px solid #3a3530;margin-top:4px;padding-top:12px;display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#888;font-weight:600">🗂 AnythingLLM 워크스페이스 연동 (선택)</label>
+            <p style="font-size:10px;color:#666;margin:0">채팅 위젯에서 워크스페이스를 고르고 자료를 올리려면 여기에 입력하세요. 위 기본 연결과 별개로 동작해서, 검색 필터는 Ollama로 두고 이 워크스페이스 채팅만 AnythingLLM으로 써도 됩니다 — 한 번 입력해두면 계속 안 바꿔도 됩니다.</p>
+            <input id="llm-anythingllm-url" type="text" placeholder="http://localhost:3001"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none"
+              value="${esc(wsLLM.anythingllmUrl||'')}">
+            <input id="llm-anythingllm-key" type="password" placeholder="API 키 (설정 > 도구 > 개발자 API에서 발급)"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none"
+              value="${esc(wsLLM.anythingllmKey||'')}">
+          </div>
+
+          <button onclick="saveLLMSettingsFromModal()" style="background:#c8a96e;color:#1a1714;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">저장</button>
+        </div>
+      </div>`;
+    el.addEventListener('click', e=>{ if(e.target===el) closeLLMSettings(); });
+    document.body.appendChild(el);
+    syncLLMPresetUI();
+  } else {
+    el.style.display='flex';
+    document.getElementById('llm-enabled').checked = !!wsLLM.enabled;
+    document.getElementById('llm-endpoint').value = wsLLM.endpoint||'http://localhost:11434/v1/chat/completions';
+    document.getElementById('llm-apikey').value = wsLLM.apiKey||'';
+    document.getElementById('llm-model').value = wsLLM.model||'';
+    document.getElementById('llm-anythingllm-url').value = wsLLM.anythingllmUrl||'';
+    document.getElementById('llm-anythingllm-key').value = wsLLM.anythingllmKey||'';
+    document.getElementById('llm-test-status').textContent='';
+    syncLLMPresetUI();
+  }
+}
+
+function closeLLMSettings(){
+  const el=document.getElementById('llm-modal');
+  if(el) el.style.display='none';
+}
+
+function saveLLMSettingsFromModal(){
+  wsLLM.enabled = !!document.getElementById('llm-enabled').checked;
+  wsLLM.endpoint = (document.getElementById('llm-endpoint').value||'').trim();
+  wsLLM.apiKey = (document.getElementById('llm-apikey').value||'').trim();
+  wsLLM.model = (document.getElementById('llm-model').value||'').trim();
+  wsLLM.anythingllmUrl = (document.getElementById('llm-anythingllm-url').value||'').trim();
+  wsLLM.anythingllmKey = (document.getElementById('llm-anythingllm-key').value||'').trim();
+  saveWsLLM();
+  showToast('로컬 AI 설정 저장됨');
+  renderAIFilterButtons();
+  closeLLMSettings();
+}
+
+// 후보 목록 중 질의와 실제로 관련 있는 것만 로컬 LLM에게 골라달라고 요청.
+// 파싱 실패·호출 실패 시에는 원래 후보(candidates) 그대로 반환하는 안전한 폴백.
+async function filterRelevantByLLM(query, candidates){
+  if(!candidates.length) return candidates;
+  const list = candidates.map((c,i)=>`[${i}] 제목: ${c.title}\n내용: ${(c.preview||'').slice(0,300)}`).join('\n\n');
+  const prompt = `아래는 검색어 "${query}"로 찾은 후보 목록입니다. 이 중 실제로 "${query}"와 내용상 관련 있는 것만 골라주세요. 단순히 단어가 한 번 언급된 것이 아니라, 실제로 그 주제를 다루는 항목만 선택하세요.\n\n${list}\n\n관련 있는 항목의 번호만 JSON 배열로만 답하세요. 예: [0, 2, 5]. 다른 설명은 붙이지 마세요.`;
+  try{
+    const raw = await callLocalLLM([{role:'user', content: prompt}]);
+    const match = raw.match(/\[[\d,\s]*\]/);
+    if(!match) return candidates;
+    const idxs = JSON.parse(match[0]);
+    if(!Array.isArray(idxs)) return candidates;
+    const filtered = idxs.map(i=>candidates[i]).filter(Boolean);
+    return filtered.length ? filtered : candidates;
+  }catch(e){
+    showToast(e.message || '로컬 AI 필터링 실패 — 전체 결과를 표시합니다.');
+    return candidates;
+  }
+}
+
+function renderAIFilterButtons(){
+  const show = !!wsLLM.enabled;
+  const b1 = document.getElementById('searchAIBtn');
+  const b2 = document.getElementById('resourceSearchAIBtn');
+  if(b1) b1.style.display = show ? '' : 'none';
+  if(b2) b2.style.display = show ? '' : 'none';
+  const chatWidget = document.getElementById('llmChatWidget');
+  if(chatWidget) chatWidget.style.display = show ? 'flex' : 'none';
+  if(show) refreshLLMWorkspaceOptions();
+}
+
+// 워크스페이스 채팅용 AnythingLLM 연결은 위의 "기본 연결"(검색 필터용 endpoint/apiKey)과 완전히
+// 독립된 별도 설정(anythingllmUrl/anythingllmKey)을 씀 — 기본 연결이 Ollama로 되어 있어도
+// 이 값만 채워져 있으면 워크스페이스 기능이 항상 켜져 있어, 기능 바꿀 때마다 설정을 오가지 않아도 됨.
+function getAnythingLLMBase(){
+  return (wsLLM.anythingllmUrl||'').trim().replace(/\/+$/,'') || null;
+}
+function anythingLLMAuthHeaders(extra){
+  const h = Object.assign({}, extra);
+  if(wsLLM.anythingllmKey) h['Authorization'] = `Bearer ${wsLLM.anythingllmKey}`;
+  return h;
+}
+
+async function fetchLLMWorkspaces(){
+  const base = getAnythingLLMBase();
+  if(!base) return [];
+  const res = await fetch(`${base}/api/v1/workspaces`, { headers: anythingLLMAuthHeaders() });
+  if(!res.ok) throw new Error(`워크스페이스 목록을 가져오지 못했습니다 (${res.status})`);
+  const data = await res.json().catch(()=>({}));
+  return Array.isArray(data.workspaces) ? data.workspaces : [];
+}
+
+async function refreshLLMWorkspaceOptions(){
+  const sel = document.getElementById('llmWorkspaceSelect');
+  const uploadBtn = document.getElementById('llmChatUploadBtn');
+  if(!sel) return;
+  const base = getAnythingLLMBase();
+  if(!base){
+    sel.style.display = 'none';
+    if(uploadBtn) uploadBtn.style.display = 'none';
+    return;
+  }
+  sel.style.display = '';
+  if(uploadBtn) uploadBtn.style.display = '';
+  sel.innerHTML = '<option value="">워크스페이스 불러오는 중…</option>';
+  try{
+    const list = await fetchLLMWorkspaces();
+    const keep = wsLLM.chatWorkspace && list.some(w => w.slug === wsLLM.chatWorkspace) ? wsLLM.chatWorkspace : '';
+    sel.innerHTML = '<option value="">(워크스페이스 없이 대화)</option>' +
+      list.map(w => `<option value="${esc(w.slug)}">${esc(w.name || w.slug)}</option>`).join('');
+    sel.value = keep;
+    wsLLM.chatWorkspace = keep;
+  }catch(e){
+    sel.innerHTML = '<option value="">⚠ 목록 로드 실패</option>';
+  }
+}
+
+function triggerLLMChatUpload(){
+  if(!wsLLM.chatWorkspace){ showToast('먼저 워크스페이스를 선택하세요'); return; }
+  const input = document.getElementById('llmChatFileInput');
+  if(input) input.click();
+}
+
+async function uploadLLMChatFile(){
+  const input = document.getElementById('llmChatFileInput');
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  const base = getAnythingLLMBase();
+  if(!base || !wsLLM.chatWorkspace){ if(input) input.value=''; return; }
+  appendLLMChatMessage('user', `📎 (업로드 중) ${file.name}`);
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('addToWorkspaces', wsLLM.chatWorkspace);
+  try{
+    const res = await fetch(`${base}/api/v1/document/upload`, { method:'POST', headers: anythingLLMAuthHeaders(), body: fd });
+    if(!res.ok) throw new Error(`업로드 실패 (${res.status})`);
+    const data = await res.json().catch(()=>({}));
+    if(data.success === false) throw new Error(data.error || '업로드 실패');
+    appendLLMChatMessage('assistant', `✅ "${file.name}" 자료를 워크스페이스에 추가했습니다.`);
+  }catch(e){
+    appendLLMChatMessage('assistant', `⚠ ${e.message}`, {isError:true});
+  }finally{
+    if(input) input.value = '';
+  }
+}
+
+async function sendAnythingLLMWorkspaceChat(base, slug, message){
+  const headers = anythingLLMAuthHeaders({ 'Content-Type': 'application/json' });
+  let res;
+  try{
+    res = await fetchWithTimeout(`${base}/api/v1/workspace/${encodeURIComponent(slug)}/chat`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ message, mode: 'chat' })
+    });
+  }catch(e){
+    if(e.message && e.message.includes('넘게 오지 않아')) throw e;
+    throw new Error('워크스페이스 서버에 연결할 수 없습니다.');
+  }
+  if(res.status===401 || res.status===403) throw new Error(`인증 실패 (${res.status})`);
+  if(!res.ok) throw new Error(`워크스페이스 호출 실패 (${res.status})`);
+  const data = await res.json().catch(()=>null);
+  if(data && data.error) throw new Error(data.error);
+  if(!data || data.textResponse==null) throw new Error('워크스페이스 응답 형식을 해석할 수 없습니다.');
+  return stripThinkTags(data.textResponse);
+}
+
+let llmChatMessages = [];
+function appendLLMChatMessage(role, content, opts){
+  opts = opts || {};
+  llmChatMessages.push({role, content});
+  const box = document.getElementById('llmChatMessages');
+  if(!box) return;
+  const div = document.createElement('div');
+  let style;
+  if(opts.isError){
+    style = 'align-self:flex-start;background:#fbe4e0;color:#7a2f22;border:1px solid #e0b3a8;border-radius:8px;padding:7px 11px;max-width:88%;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
+  }else if(role==='user'){
+    style = 'align-self:flex-end;background:var(--accent);color:#fff;border-radius:8px;padding:7px 11px;max-width:88%;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
+  }else{
+    style = 'align-self:flex-start;background:#f2ece0;border-radius:8px;padding:7px 11px;max-width:88%;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
+  }
+  div.style.cssText = style;
+  div.textContent = content;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+async function sendLLMChat(){
+  const input = document.getElementById('llmChatInput');
+  const btn = document.getElementById('llmChatSendBtn');
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+  input.value = '';
+  appendLLMChatMessage('user', text);
+  input.disabled = true; if(btn) btn.disabled = true;
+  const box = document.getElementById('llmChatMessages');
+  const waitDiv = document.createElement('div');
+  waitDiv.id = 'llmChatWaiting';
+  waitDiv.className = 'llm-waiting-pulse';
+  waitDiv.style.cssText = 'align-self:flex-start;color:var(--muted);font-size:13px';
+  const waitStartedAt = Date.now();
+  const tickWaitDiv = () => {
+    const sec = Math.floor((Date.now() - waitStartedAt) / 1000);
+    waitDiv.textContent = `● 응답 대기 중… ${sec}초`;
+  };
+  tickWaitDiv();
+  const waitTimer = setInterval(tickWaitDiv, 1000);
+  if(box){ box.appendChild(waitDiv); box.scrollTop = box.scrollHeight; }
+  try{
+    const base = getAnythingLLMBase();
+    let reply;
+    if(base && wsLLM.chatWorkspace){
+      reply = await sendAnythingLLMWorkspaceChat(base, wsLLM.chatWorkspace, text);
+    }else{
+      reply = await callLocalLLM(llmChatMessages.map(m => ({role: m.role, content: m.content})));
+    }
+    appendLLMChatMessage('assistant', reply);
+  }catch(e){
+    appendLLMChatMessage('assistant', `⚠ ${e.message}`, {isError:true});
+  }finally{
+    clearInterval(waitTimer);
+    const w = document.getElementById('llmChatWaiting'); if(w) w.remove();
+    input.disabled = false; if(btn) btn.disabled = false;
+    input.focus();
+  }
+}
+
 loadLocal(); render();
 
 // ── 다중 프로젝트 전환 ──
@@ -1786,6 +2285,7 @@ const WS_NOTION_KEY = 'ws_notion_settings';
 let wsNotion = (()=>{try{return JSON.parse(localStorage.getItem(WS_NOTION_KEY)||'{}')}catch(e){return {}}})();
 
 function saveWsNotion(){localStorage.setItem(WS_NOTION_KEY, JSON.stringify(wsNotion));}
+
 
 function openResearchImport(){
   let el = document.getElementById('ri-modal');
