@@ -245,8 +245,9 @@ header input{width:190px}
       <button id="llmChatSyncBtn" onclick="syncMaterialsToWorkspace()" title="집필실 원고·자료실 전체를 이 워크스페이스에 동기화" style="font-size:12px;padding:5px 9px;display:none">🔄</button>
       <input type="file" id="llmChatFileInput" style="display:none" onchange="uploadLLMChatFile()">
     </div>
-    <div id="llmAPIControlsRow" style="display:none;gap:4px;margin-bottom:8px;align-items:center">
+    <div id="llmAPIControlsRow" style="display:none;gap:4px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
       <span id="llmAPIEngineLabel" class="small" style="color:var(--muted)">엔진: -</span>
+      <span id="llmAPIUsageLabel" class="small" style="color:var(--muted)"></span>
     </div>
     <div id="llmChatMessages" style="flex:1;min-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
     <div style="display:flex;gap:4px">
@@ -1869,10 +1870,25 @@ let wsAPI = (()=>{
   const DEFAULT = {
     enabled:false,
     activeProvider:'gemini',
+    // USD→KRW 폴백값. 자동 갱신에 실패해도 계산 자체는 되게 두는 대략적인 기본값이라
+    // 실제 환율과 다를 수 있다 — krwRateUpdatedAt이 있으면 그게 마지막으로 실제 조회된 값.
+    krwRate: 1400,
+    krwRateUpdatedAt: null,
     providers:{
-      gemini: {apiKey:'', model:'gemini-2.5-flash-lite'},
-      claude: {apiKey:'', model:''},
-      custom: {name:'', endpoint:'', apiKey:'', model:''}
+      // priceIn/priceOut: USD, 100만 토큰당 단가. 모델별로 자주 바뀌고 요금제에 따라도 달라서
+      // 하드코딩하지 않고 사용자가 직접 입력하게 뒀다(원칙 20: 검증 안 된 값을 사실인 것처럼
+      // 박아두지 않는다) — 0이면 그 provider의 비용 계산은 항상 0으로 표시된다.
+      gemini: {apiKey:'', model:'gemini-3.5-flash-lite', priceIn:0, priceOut:0},
+      claude: {apiKey:'', model:'', priceIn:0, priceOut:0},
+      custom: {name:'', endpoint:'', apiKey:'', model:'', priceIn:0, priceOut:0}
+    },
+    // 누적 토큰수만 저장하고 비용은 항상 "지금 설정된 단가"로 다시 계산한다(과거 호출 시점의
+    // 단가를 따로 기록하지 않는 단순화) — 정밀 청구 내역이 아니라 대략적인 누적 감을 보여주는
+    // 용도로 충분하다고 판단했다. 단가를 바꾸면 과거 누적분도 새 단가 기준으로 다시 계산된다.
+    usage:{
+      gemini:{inputTokens:0, outputTokens:0, calls:0},
+      claude:{inputTokens:0, outputTokens:0, calls:0},
+      custom:{inputTokens:0, outputTokens:0, calls:0}
     }
   };
   try{
@@ -1883,16 +1899,75 @@ let wsAPI = (()=>{
       claude: Object.assign({}, DEFAULT.providers.claude, saved.providers?.claude),
       custom: Object.assign({}, DEFAULT.providers.custom, saved.providers?.custom)
     };
+    merged.usage = {
+      gemini: Object.assign({}, DEFAULT.usage.gemini, saved.usage?.gemini),
+      claude: Object.assign({}, DEFAULT.usage.claude, saved.usage?.claude),
+      custom: Object.assign({}, DEFAULT.usage.custom, saved.usage?.custom)
+    };
     return merged;
   }catch(e){ return DEFAULT; }
 })();
 function saveWsAPI(){ localStorage.setItem(WS_API_KEY, JSON.stringify(wsAPI)); }
+
+// 단가(USD/100만 토큰) × 누적 토큰수로 비용을 계산 — calcTotalCostUSD는 세 provider 합계.
+function calcProviderCostUSD(pid){
+  const u = wsAPI.usage[pid], p = wsAPI.providers[pid];
+  if(!u || !p) return 0;
+  return (u.inputTokens/1e6)*(Number(p.priceIn)||0) + (u.outputTokens/1e6)*(Number(p.priceOut)||0);
+}
+function calcTotalCostUSD(){
+  return ['gemini','claude','custom'].reduce((sum,pid)=>sum+calcProviderCostUSD(pid), 0);
+}
+function usdToKrw(usd){ return usd * (Number(wsAPI.krwRate)||0); }
+function formatKRW(n){ return '₩' + Math.round(n).toLocaleString('ko-KR'); }
+
+// API 호출이 성공할 때마다 여기로 토큰수를 넘겨 누적시킨다 — provider별 호출부(callGeminiAPI 등)
+// 끝에서 한 번씩만 부른다(원칙 10: 이 집계도 한 곳에서만 하게 함).
+function recordAPIUsage(pid, inputTokens, outputTokens){
+  const u = wsAPI.usage[pid];
+  if(!u) return;
+  u.inputTokens += (inputTokens||0);
+  u.outputTokens += (outputTokens||0);
+  u.calls += 1;
+  saveWsAPI();
+  renderAPIUsageDisplay();
+}
+
+// USD→KRW 환율 자동 조회. 실패해도(네트워크·CORS 등) 이전 값이나 폴백값으로 계산은 계속되고,
+// 에러는 호출부가 잡아서 안내만 하도록 던지기만 한다 — 이 기능이 죽어도 채팅 자체는 멀쩡해야 함.
+async function refreshKRWRate(){
+  const res = await fetch('https://api.frankfurter.app/latest?amount=1&from=USD&to=KRW');
+  if(!res.ok) throw new Error(`환율 조회 실패 (${res.status})`);
+  const data = await res.json().catch(()=>null);
+  const rate = data?.rates?.KRW;
+  if(typeof rate !== 'number') throw new Error('환율 응답 형식을 해석할 수 없습니다.');
+  wsAPI.krwRate = rate;
+  wsAPI.krwRateUpdatedAt = new Date().toISOString();
+  saveWsAPI();
+  return rate;
+}
 
 function apiProviderLabel(id){
   if(id==='gemini') return 'Gemini';
   if(id==='claude') return 'Claude';
   if(id==='custom') return wsAPI.providers.custom.name || '커스텀';
   return id;
+}
+
+// 채팅창 상단(API 탭)의 엔진명·누적요금 표시 + (열려 있다면) 설정 모달의 사용량 표까지 갱신.
+// 호출이 성공할 때마다(recordAPIUsage), 탭을 바꿀 때(setChatTab), 설정을 저장/초기화할 때 불린다.
+function renderAPIUsageDisplay(){
+  const engineLabel = document.getElementById('llmAPIEngineLabel');
+  if(engineLabel) engineLabel.textContent = `엔진: ${apiProviderLabel(wsAPI.activeProvider)}${wsAPI.enabled?'':' (꺼짐 — ⚙ 관리자 → API 설정에서 켜주세요)'}`;
+  const usageLabel = document.getElementById('llmAPIUsageLabel');
+  if(usageLabel){
+    const activeCostKrw = usdToKrw(calcProviderCostUSD(wsAPI.activeProvider));
+    const totalCostKrw = usdToKrw(calcTotalCostUSD());
+    usageLabel.textContent = `누적 ${formatKRW(activeCostKrw)} (전체 ${formatKRW(totalCostKrw)})`;
+  }
+  // 설정 모달이 현재 열려 있으면 그 안의 사용량 표도 같이 최신화 — 채팅 중에 모달을 다시 열지
+  // 않아도 방금 호출분이 바로 반영되게(모달이 닫혀 있으면 함수 내부에서 조용히 아무것도 안 함).
+  if(document.getElementById('api-modal')) renderAPIUsageModalSummary();
 }
 
 // 단일 호출부 — 모든 클라우드 API 요청이 여길 거침(원칙 10). provider별 요청/응답 포맷 차이는
@@ -1913,7 +1988,7 @@ async function callAPILLM(messages, options={}){
 // 다름) — 이 함수 안에서만 변환해서 밖(callAPILLM 호출부)에서는 항상 같은 messages 포맷을 쓰게 한다.
 // 브라우저에서 직접 fetch 가능(구글 공식 웹앱 튜토리얼도 이 방식을 씀) — 별도 프록시 불필요.
 async function callGeminiAPI(cfg, messages, options={}){
-  const model = (cfg.model||'gemini-2.5-flash-lite').trim();
+  const model = (cfg.model||'gemini-3.5-flash-lite').trim();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
   const contents = messages.map(m=>({ role: m.role==='assistant' ? 'model' : 'user', parts:[{text: m.content}] }));
   let res;
@@ -1930,10 +2005,14 @@ async function callGeminiAPI(cfg, messages, options={}){
   if(res.status===400){ const d = await res.json().catch(()=>({})); throw new Error(`Gemini 요청 오류 — ${d?.error?.message || '요청 형식을 확인해주세요.'}`); }
   if(res.status===401 || res.status===403) throw new Error(`Gemini 인증 실패 (${res.status}) — API 키를 확인해주세요.`);
   if(res.status===429) throw new Error('Gemini 요청 한도를 초과했습니다(429). 잠시 후 다시 시도해주세요.');
-  if(!res.ok) throw new Error(`Gemini 호출 실패 (${res.status})`);
+  // 404는 대개 "이 모델명을 이 API 버전/키로 찾을 수 없음"이라 원인이 다양해서(모델명 오타,
+  // 이 API 키로는 못 쓰는 모델, API 버전 문제 등) 구글이 보낸 원문 메시지를 그대로 보여줘야
+  // 사용자가 정확히 뭘 고쳐야 하는지 알 수 있다 — 상태코드만 보여주면 추측만 하게 됨.
+  if(!res.ok){ const d = await res.json().catch(()=>({})); throw new Error(`Gemini 호출 실패 (${res.status}) — ${d?.error?.message || '원인을 알 수 없습니다.'}`); }
   const data = await res.json().catch(()=>null);
   const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join('');
   if(text==null) throw new Error('Gemini 응답 형식을 해석할 수 없습니다 — 안전 필터에 걸렸을 수도 있습니다.');
+  recordAPIUsage('gemini', data?.usageMetadata?.promptTokenCount, data?.usageMetadata?.candidatesTokenCount);
   return text;
 }
 
@@ -1964,6 +2043,7 @@ async function callClaudeAPI(cfg, messages, options={}){
   const data = await res.json().catch(()=>null);
   const text = data?.content?.map(c=>c.text).join('');
   if(text==null) throw new Error('Claude 응답 형식을 해석할 수 없습니다.');
+  recordAPIUsage('claude', data?.usage?.input_tokens, data?.usage?.output_tokens);
   return text;
 }
 
@@ -1984,10 +2064,11 @@ async function callCustomOpenAICompatAPI(cfg, messages, options={}){
     throw new Error('커스텀 API 서버에 연결할 수 없습니다 — CORS로 막혀 있을 수 있습니다(브라우저 직접 호출을 허용하지 않는 서비스가 많습니다. 이 경우 별도 프록시가 필요합니다).');
   }
   if(res.status===401 || res.status===403) throw new Error(`인증 실패 (${res.status}) — API 키를 확인해주세요.`);
-  if(!res.ok) throw new Error(`커스텀 API 호출 실패 (${res.status})`);
+  if(!res.ok){ const d = await res.json().catch(()=>({})); throw new Error(`커스텀 API 호출 실패 (${res.status}) — ${d?.error?.message || ''}`); }
   const data = await res.json().catch(()=>null);
   const content = data?.choices?.[0]?.message?.content;
   if(content==null) throw new Error('응답 형식을 해석할 수 없습니다.');
+  recordAPIUsage('custom', data?.usage?.prompt_tokens, data?.usage?.completion_tokens);
   return content;
 }
 
@@ -2191,8 +2272,14 @@ function openAPISettings(){
             <label style="font-size:11px;color:#c8a96e;font-weight:700">Gemini</label>
             <input id="api-gemini-key" type="password" placeholder="API 키"
               style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
-            <input id="api-gemini-model" type="text" placeholder="모델명 (기본: gemini-2.5-flash-lite)"
+            <input id="api-gemini-model" type="text" placeholder="모델명 (기본: gemini-3.5-flash-lite)"
               style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            <div style="display:flex;gap:6px">
+              <input id="api-gemini-price-in" type="number" step="0.01" min="0" placeholder="입력 단가($/100만 토큰)"
+                style="flex:1;min-width:0;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+              <input id="api-gemini-price-out" type="number" step="0.01" min="0" placeholder="출력 단가($/100만 토큰)"
+                style="flex:1;min-width:0;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            </div>
           </div>
 
           <div style="border-top:1px solid #3a3530;padding-top:10px;display:flex;flex-direction:column;gap:6px">
@@ -2201,6 +2288,12 @@ function openAPISettings(){
               style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
             <input id="api-claude-model" type="text" placeholder="모델명 (예: claude-sonnet-4-5)"
               style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            <div style="display:flex;gap:6px">
+              <input id="api-claude-price-in" type="number" step="0.01" min="0" placeholder="입력 단가($/100만 토큰)"
+                style="flex:1;min-width:0;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+              <input id="api-claude-price-out" type="number" step="0.01" min="0" placeholder="출력 단가($/100만 토큰)"
+                style="flex:1;min-width:0;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            </div>
           </div>
 
           <div style="border-top:1px solid #3a3530;padding-top:10px;display:flex;flex-direction:column;gap:6px">
@@ -2214,6 +2307,25 @@ function openAPISettings(){
               style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
             <input id="api-custom-model" type="text" placeholder="모델명"
               style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            <div style="display:flex;gap:6px">
+              <input id="api-custom-price-in" type="number" step="0.01" min="0" placeholder="입력 단가($/100만 토큰)"
+                style="flex:1;min-width:0;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+              <input id="api-custom-price-out" type="number" step="0.01" min="0" placeholder="출력 단가($/100만 토큰)"
+                style="flex:1;min-width:0;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #3a3530;padding-top:10px;display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#c8a96e;font-weight:700">사용량 · 요금 (누적)</label>
+            <p style="font-size:10px;color:#666;margin:0">단가는 위 각 엔진 항목에 직접 입력해야 계산됩니다(비워두면 0원으로 표시). 원화 환산은 아래 환율을 씁니다.</p>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input id="api-krw-rate" type="number" step="0.01" min="0" placeholder="환율 (1 USD = ? KRW)"
+                style="flex:1;min-width:0;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+              <button type="button" onclick="onRefreshKRWRateClick()" style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap">환율 갱신</button>
+            </div>
+            <div id="api-krw-rate-updated" style="font-size:10px;color:#666"></div>
+            <div id="api-usage-summary" style="font-size:11px;color:#e8e0d0;line-height:1.7;background:#151310;border-radius:6px;padding:9px 11px"></div>
+            <button type="button" onclick="resetAPIUsage()" style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#c88;padding:7px;font-size:11px;font-family:inherit;cursor:pointer">사용량 초기화</button>
           </div>
 
           <button onclick="saveAPISettingsFromModal()" style="background:#c8a96e;color:#1a1714;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">저장</button>
@@ -2231,13 +2343,65 @@ function fillAPISettingsModal(){
   document.getElementById('api-enabled').checked = !!wsAPI.enabled;
   document.getElementById('api-gemini-key').value = wsAPI.providers.gemini.apiKey||'';
   document.getElementById('api-gemini-model').value = wsAPI.providers.gemini.model||'';
+  document.getElementById('api-gemini-price-in').value = wsAPI.providers.gemini.priceIn||'';
+  document.getElementById('api-gemini-price-out').value = wsAPI.providers.gemini.priceOut||'';
   document.getElementById('api-claude-key').value = wsAPI.providers.claude.apiKey||'';
   document.getElementById('api-claude-model').value = wsAPI.providers.claude.model||'';
+  document.getElementById('api-claude-price-in').value = wsAPI.providers.claude.priceIn||'';
+  document.getElementById('api-claude-price-out').value = wsAPI.providers.claude.priceOut||'';
   document.getElementById('api-custom-name').value = wsAPI.providers.custom.name||'';
   document.getElementById('api-custom-endpoint').value = wsAPI.providers.custom.endpoint||'';
   document.getElementById('api-custom-key').value = wsAPI.providers.custom.apiKey||'';
   document.getElementById('api-custom-model').value = wsAPI.providers.custom.model||'';
+  document.getElementById('api-custom-price-in').value = wsAPI.providers.custom.priceIn||'';
+  document.getElementById('api-custom-price-out').value = wsAPI.providers.custom.priceOut||'';
+  document.getElementById('api-krw-rate').value = wsAPI.krwRate||'';
   highlightAPIEngineButton(wsAPI.activeProvider);
+  renderAPIUsageModalSummary();
+}
+// 모달의 환율 표시줄 + provider별 누적 사용량/비용 표. 값이 바뀔 때마다(초기 열기·환율 갱신·초기화)
+// 다시 그려서 항상 최신 wsAPI 값을 보여준다.
+function renderAPIUsageModalSummary(){
+  const updEl = document.getElementById('api-krw-rate-updated');
+  if(updEl){
+    updEl.textContent = wsAPI.krwRateUpdatedAt
+      ? `마지막 자동 갱신: ${new Date(wsAPI.krwRateUpdatedAt).toLocaleString('ko-KR')}`
+      : '아직 자동 갱신한 적 없음 — 위 값은 기본값이거나 직접 입력한 값입니다.';
+  }
+  const sumEl = document.getElementById('api-usage-summary');
+  if(sumEl){
+    const rows = ['gemini','claude','custom'].map(pid=>{
+      const u = wsAPI.usage[pid];
+      const costUsd = calcProviderCostUSD(pid);
+      return `${apiProviderLabel(pid)}: ${u.calls}회 · 입력 ${u.inputTokens.toLocaleString('ko-KR')} / 출력 ${u.outputTokens.toLocaleString('ko-KR')} 토큰 · ${formatKRW(usdToKrw(costUsd))}`;
+    }).join('<br>');
+    const totalKrw = usdToKrw(calcTotalCostUSD());
+    sumEl.innerHTML = rows + `<br><b style="color:#c8a96e">합계: ${formatKRW(totalKrw)}</b>`;
+  }
+}
+// 환율을 수동으로 입력만 해도 저장 시 반영되지만, 여기서는 "지금 조회해서 바로 반영" 버튼 동작.
+async function onRefreshKRWRateClick(){
+  try{
+    const rate = await refreshKRWRate();
+    document.getElementById('api-krw-rate').value = rate;
+    renderAPIUsageModalSummary();
+    renderAPIUsageDisplay();
+    showToast(`환율 갱신됨 — 1 USD = ${formatKRW(rate)}`);
+  }catch(e){
+    showToast(e.message || '환율 조회에 실패했습니다. 값을 직접 입력해도 계산은 됩니다.');
+  }
+}
+function resetAPIUsage(){
+  if(!confirm('누적 API 사용량(토큰수·비용)을 모두 0으로 초기화할까요? 이 작업은 되돌릴 수 없습니다.')) return;
+  wsAPI.usage = {
+    gemini:{inputTokens:0, outputTokens:0, calls:0},
+    claude:{inputTokens:0, outputTokens:0, calls:0},
+    custom:{inputTokens:0, outputTokens:0, calls:0}
+  };
+  saveWsAPI();
+  renderAPIUsageModalSummary();
+  renderAPIUsageDisplay();
+  showToast('API 사용량이 초기화되었습니다.');
 }
 function highlightAPIEngineButton(id){
   document.querySelectorAll('#api-engine-buttons button').forEach(btn=>{
@@ -2263,15 +2427,24 @@ function saveAPISettingsFromModal(){
   if(el_selectedEngine) wsAPI.activeProvider = el_selectedEngine;
   wsAPI.providers.gemini.apiKey = (document.getElementById('api-gemini-key').value||'').trim();
   wsAPI.providers.gemini.model = (document.getElementById('api-gemini-model').value||'').trim();
+  wsAPI.providers.gemini.priceIn = Number(document.getElementById('api-gemini-price-in').value)||0;
+  wsAPI.providers.gemini.priceOut = Number(document.getElementById('api-gemini-price-out').value)||0;
   wsAPI.providers.claude.apiKey = (document.getElementById('api-claude-key').value||'').trim();
   wsAPI.providers.claude.model = (document.getElementById('api-claude-model').value||'').trim();
+  wsAPI.providers.claude.priceIn = Number(document.getElementById('api-claude-price-in').value)||0;
+  wsAPI.providers.claude.priceOut = Number(document.getElementById('api-claude-price-out').value)||0;
   wsAPI.providers.custom.name = (document.getElementById('api-custom-name').value||'').trim();
   wsAPI.providers.custom.endpoint = (document.getElementById('api-custom-endpoint').value||'').trim();
   wsAPI.providers.custom.apiKey = (document.getElementById('api-custom-key').value||'').trim();
   wsAPI.providers.custom.model = (document.getElementById('api-custom-model').value||'').trim();
+  wsAPI.providers.custom.priceIn = Number(document.getElementById('api-custom-price-in').value)||0;
+  wsAPI.providers.custom.priceOut = Number(document.getElementById('api-custom-price-out').value)||0;
+  const rateInput = Number(document.getElementById('api-krw-rate').value);
+  if(rateInput>0) wsAPI.krwRate = rateInput;
   saveWsAPI();
   showToast(`API 설정 저장됨 (엔진: ${apiProviderLabel(wsAPI.activeProvider)})`);
   renderAIFilterButtons();
+  renderAPIUsageDisplay();
   closeAPISettings();
 }
 
@@ -2544,8 +2717,7 @@ function setChatTab(tab){
   const apiRow = document.getElementById('llmAPIControlsRow');
   if(localRow) localRow.style.display = tab==='local' ? 'flex' : 'none';
   if(apiRow) apiRow.style.display = tab==='api' ? 'flex' : 'none';
-  const engineLabel = document.getElementById('llmAPIEngineLabel');
-  if(engineLabel) engineLabel.textContent = `엔진: ${apiProviderLabel(wsAPI.activeProvider)}${wsAPI.enabled?'':' (꺼짐 — ⚙ 관리자 → API 설정에서 켜주세요)'}`;
+  renderAPIUsageDisplay();
   highlightChatTabButtons();
   renderChatMessagesBox();
 }
