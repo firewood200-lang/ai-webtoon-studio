@@ -173,6 +173,7 @@ header input{width:190px}
       <button class="admin-menu-item" onclick="adminImport()">📂 JSON 불러오기</button>
       <div class="admin-menu-sep"></div>
       <button class="admin-menu-item" onclick="document.getElementById('adminDropdown').classList.remove('open');openLLMSettings()">🖥 로컬 AI 설정</button>
+      <button class="admin-menu-item" onclick="document.getElementById('adminDropdown').classList.remove('open');openAPISettings()">☁ API 설정</button>
       <div class="admin-menu-sep"></div>
       <button class="admin-menu-item danger" onclick="adminReset()">🗑 전체 초기화</button>
     </div>
@@ -228,8 +229,12 @@ header input{width:190px}
   <div id="searchResults" class="small">검색어를 입력하세요.</div>
 
   <div class="card" id="llmChatWidget" style="margin-top:12px;display:none;flex-direction:column;flex:1;min-height:260px">
-    <div class="section-title">🖥 로컬 AI 채팅</div>
+    <div class="section-title">🖥 AI 채팅</div>
     <div style="display:flex;gap:4px;margin-bottom:8px">
+      <button type="button" id="llmTabLocalBtn" onclick="setChatTab('local')" style="flex:1;font-size:12px;padding:6px 7px;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-family:inherit">🖥 로컬 AI</button>
+      <button type="button" id="llmTabAPIBtn" onclick="setChatTab('api')" style="flex:1;font-size:12px;padding:6px 7px;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-family:inherit">☁ API</button>
+    </div>
+    <div id="llmLocalControlsRow" style="display:flex;gap:4px;margin-bottom:8px">
       <div id="llmWorkspaceWrap" style="position:relative;flex:1;display:none">
         <button type="button" id="llmWorkspaceBtn" onclick="toggleLLMWorkspaceList(event)" style="width:100%;text-align:left;font-size:12px;padding:5px 7px;background:#fff;border:1px solid var(--line);border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:4px">
           <span id="llmWorkspaceBtnLabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">워크스페이스 선택</span><span style="flex-shrink:0;color:var(--muted)">▾</span>
@@ -237,7 +242,11 @@ header input{width:190px}
         <div id="llmWorkspaceListPanel" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:30;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:2px;max-height:200px;overflow-y:auto;box-shadow:var(--shadow)"></div>
       </div>
       <button id="llmChatUploadBtn" onclick="triggerLLMChatUpload()" title="선택한 워크스페이스에 자료 업로드" style="font-size:12px;padding:5px 9px;display:none">📎</button>
+      <button id="llmChatSyncBtn" onclick="syncMaterialsToWorkspace()" title="집필실 원고·자료실 전체를 이 워크스페이스에 동기화" style="font-size:12px;padding:5px 9px;display:none">🔄</button>
       <input type="file" id="llmChatFileInput" style="display:none" onchange="uploadLLMChatFile()">
+    </div>
+    <div id="llmAPIControlsRow" style="display:none;gap:4px;margin-bottom:8px;align-items:center">
+      <span id="llmAPIEngineLabel" class="small" style="color:var(--muted)">엔진: -</span>
     </div>
     <div id="llmChatMessages" style="flex:1;min-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
     <div style="display:flex;gap:4px">
@@ -1523,7 +1532,9 @@ function stripInlineTags(s){
   // 【복선】...【/복선】 형태 태그 제거
   return s.replace(/【[^】]+】/g,"");
 }
-function exportTXT(removeTags){
+// 원고트리+자료실 전체를 텍스트로 직렬화 — TXT 내보내기와 AnythingLLM 자료동기화가 이 함수 하나를 공유한다
+// (원칙 9: 입출력 형식 표준화. 두 기능이 서로 다른 포맷으로 갈라지지 않게 여기서만 만든다)
+function buildExportText(removeTags){
   let text=`# ${state.title}\n\n`;
   const proc=s=>removeTags?stripInlineTags(stripHtml(s)):stripHtml(s);
   function walk(pid,depth){
@@ -1537,6 +1548,10 @@ function exportTXT(removeTags){
   walk(null,0);
   text+=`\n\n# 자료실\n`;
   state.resources.forEach(r=>{text+=`\n## ${r.title}\n${proc(r.body||"")}\n[메모]\n${r.memo||""}\n`});
+  return text;
+}
+function exportTXT(removeTags){
+  const text=buildExportText(removeTags);
   const suffix=removeTags?"_태그제거":"";
   download(new Blob([text],{type:"text/plain;charset=utf-8"}),safe(state.title)+suffix+".txt");
 }
@@ -1845,6 +1860,137 @@ function stripThinkTags(text){
   return out.trim();
 }
 
+// ── 클라우드 API(Gemini/Claude/커스텀) 연동 — AnythingLLM/Ollama와 완전히 독립적으로 동작 ──
+// 사용자가 이 컴퓨터의 AnythingLLM을 자주 쓰지 않아, 로컬 AI 설정과 별개로 앱 자체에서
+// API 키를 직접 입력하고 엔진(제공자)을 토글로 고를 수 있게 분리했다. 키는 원칙 17대로
+// 파일에 하드코딩하지 않고 localStorage에서 런타임 로드만 한다.
+const WS_API_KEY = 'ws_api_settings';
+let wsAPI = (()=>{
+  const DEFAULT = {
+    enabled:false,
+    activeProvider:'gemini',
+    providers:{
+      gemini: {apiKey:'', model:'gemini-2.5-flash-lite'},
+      claude: {apiKey:'', model:''},
+      custom: {name:'', endpoint:'', apiKey:'', model:''}
+    }
+  };
+  try{
+    const saved = JSON.parse(localStorage.getItem(WS_API_KEY)||'{}');
+    const merged = Object.assign({}, DEFAULT, saved);
+    merged.providers = {
+      gemini: Object.assign({}, DEFAULT.providers.gemini, saved.providers?.gemini),
+      claude: Object.assign({}, DEFAULT.providers.claude, saved.providers?.claude),
+      custom: Object.assign({}, DEFAULT.providers.custom, saved.providers?.custom)
+    };
+    return merged;
+  }catch(e){ return DEFAULT; }
+})();
+function saveWsAPI(){ localStorage.setItem(WS_API_KEY, JSON.stringify(wsAPI)); }
+
+function apiProviderLabel(id){
+  if(id==='gemini') return 'Gemini';
+  if(id==='claude') return 'Claude';
+  if(id==='custom') return wsAPI.providers.custom.name || '커스텀';
+  return id;
+}
+
+// 단일 호출부 — 모든 클라우드 API 요청이 여길 거침(원칙 10). provider별 요청/응답 포맷 차이는
+// 이 안의 어댑터 함수(callGeminiAPI/callClaudeAPI/callCustomOpenAICompatAPI)에서만 흡수하고,
+// 밖에서는 항상 같은 messages 배열({role,content})을 넣고 같은 문자열을 돌려받는다.
+async function callAPILLM(messages, options={}){
+  if(!wsAPI.enabled) throw new Error('API 채팅이 비활성화되어 있습니다. ⚙ 관리자 → API 설정에서 켜주세요.');
+  const pid = wsAPI.activeProvider;
+  const cfg = wsAPI.providers[pid];
+  if(!cfg || !cfg.apiKey) throw new Error(`${apiProviderLabel(pid)} API 키가 입력되어 있지 않습니다. ⚙ 관리자 → API 설정에서 입력해주세요.`);
+  if(pid==='gemini') return await callGeminiAPI(cfg, messages, options);
+  if(pid==='claude') return await callClaudeAPI(cfg, messages, options);
+  if(pid==='custom') return await callCustomOpenAICompatAPI(cfg, messages, options);
+  throw new Error('알 수 없는 API 제공자입니다.');
+}
+
+// Gemini는 role이 user/model이고 대화 이력을 contents 배열로 받는다(OpenAI류 messages와 형식이
+// 다름) — 이 함수 안에서만 변환해서 밖(callAPILLM 호출부)에서는 항상 같은 messages 포맷을 쓰게 한다.
+// 브라우저에서 직접 fetch 가능(구글 공식 웹앱 튜토리얼도 이 방식을 씀) — 별도 프록시 불필요.
+async function callGeminiAPI(cfg, messages, options={}){
+  const model = (cfg.model||'gemini-2.5-flash-lite').trim();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
+  const contents = messages.map(m=>({ role: m.role==='assistant' ? 'model' : 'user', parts:[{text: m.content}] }));
+  let res;
+  try{
+    res = await fetchWithTimeout(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ contents, generationConfig:{ temperature: options.temperature ?? 0.4 } })
+    });
+  }catch(e){
+    if(e.message && e.message.includes('넘게 오지 않아')) throw e;
+    throw new Error('Gemini API에 연결할 수 없습니다. 네트워크 상태를 확인해주세요.');
+  }
+  if(res.status===400){ const d = await res.json().catch(()=>({})); throw new Error(`Gemini 요청 오류 — ${d?.error?.message || '요청 형식을 확인해주세요.'}`); }
+  if(res.status===401 || res.status===403) throw new Error(`Gemini 인증 실패 (${res.status}) — API 키를 확인해주세요.`);
+  if(res.status===429) throw new Error('Gemini 요청 한도를 초과했습니다(429). 잠시 후 다시 시도해주세요.');
+  if(!res.ok) throw new Error(`Gemini 호출 실패 (${res.status})`);
+  const data = await res.json().catch(()=>null);
+  const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join('');
+  if(text==null) throw new Error('Gemini 응답 형식을 해석할 수 없습니다 — 안전 필터에 걸렸을 수도 있습니다.');
+  return text;
+}
+
+// Claude API는 기본적으로 브라우저 CORS를 막아두지만, anthropic-dangerous-direct-browser-access
+// 헤더를 추가하면 브라우저에서 직접 호출을 허용한다(2024년 공식 지원 발표).
+async function callClaudeAPI(cfg, messages, options={}){
+  const model = (cfg.model||'').trim();
+  if(!model) throw new Error('Claude 모델명을 입력해주세요 (예: claude-sonnet-4-5).');
+  let res;
+  try{
+    res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': cfg.apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({ model, max_tokens: options.maxTokens ?? 1024, messages: messages.map(m=>({role:m.role, content:m.content})) })
+    });
+  }catch(e){
+    if(e.message && e.message.includes('넘게 오지 않아')) throw e;
+    throw new Error('Claude API에 연결할 수 없습니다. 네트워크 상태를 확인해주세요.');
+  }
+  if(res.status===401) throw new Error('Claude 인증 실패 (401) — API 키를 확인해주세요.');
+  if(res.status===429) throw new Error('Claude 요청 한도를 초과했습니다(429). 잠시 후 다시 시도해주세요.');
+  if(!res.ok){ const d = await res.json().catch(()=>({})); throw new Error(`Claude 호출 실패 (${res.status}) — ${d?.error?.message||''}`); }
+  const data = await res.json().catch(()=>null);
+  const text = data?.content?.map(c=>c.text).join('');
+  if(text==null) throw new Error('Claude 응답 형식을 해석할 수 없습니다.');
+  return text;
+}
+
+// "다른 API도 쓸 수 있는 환경" — OpenAI 호환(Chat Completions) 포맷을 쓰는 서비스라면 이름 없이도
+// 여기 하나로 커버된다(OpenAI, Groq, OpenRouter 등). 다만 이런 서비스 다수는 브라우저 직접 호출 시
+// CORS로 막혀 있어(OpenAI 개발자 포럼에 관련 사례 다수) 프록시가 필요할 수 있음을 에러 메시지로 안내한다.
+async function callCustomOpenAICompatAPI(cfg, messages, options={}){
+  if(!cfg.endpoint) throw new Error('커스텀 API 엔드포인트 URL이 입력되어 있지 않습니다.');
+  let res;
+  try{
+    res = await fetchWithTimeout(cfg.endpoint, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
+      body: JSON.stringify({ model: cfg.model||undefined, messages, temperature: options.temperature ?? 0.4, stream:false })
+    });
+  }catch(e){
+    if(e.message && e.message.includes('넘게 오지 않아')) throw e;
+    throw new Error('커스텀 API 서버에 연결할 수 없습니다 — CORS로 막혀 있을 수 있습니다(브라우저 직접 호출을 허용하지 않는 서비스가 많습니다. 이 경우 별도 프록시가 필요합니다).');
+  }
+  if(res.status===401 || res.status===403) throw new Error(`인증 실패 (${res.status}) — API 키를 확인해주세요.`);
+  if(!res.ok) throw new Error(`커스텀 API 호출 실패 (${res.status})`);
+  const data = await res.json().catch(()=>null);
+  const content = data?.choices?.[0]?.message?.content;
+  if(content==null) throw new Error('응답 형식을 해석할 수 없습니다.');
+  return content;
+}
+
 const LLM_PRESETS = {
   ollama: {url:'http://localhost:11434/v1/chat/completions', hint:'Ollama — 기본적으로 API 키가 필요 없습니다.'},
   lmstudio: {url:'http://localhost:1234/v1/chat/completions', hint:'LM Studio — 기본적으로 API 키가 필요 없습니다.'},
@@ -2010,6 +2156,125 @@ function saveLLMSettingsFromModal(){
   closeLLMSettings();
 }
 
+// API 설정 모달 — 로컬 AI 설정(llm-modal)과 완전히 독립. 세 provider(Gemini/Claude/커스텀)의
+// 키·모델을 한 화면에서 다 볼 수 있게 두고, "사용할 엔진" 라디오로 그중 하나만 활성화한다 —
+// 값을 다 채워두고 엔진만 토글로 바꿔가며 쓸 수 있게 하기 위함(필드를 provider 전환할 때마다
+// 숨기면 아직 저장 안 한 값이 사라지는 문제가 있어, 그 방식은 쓰지 않았다).
+function openAPISettings(){
+  let el = document.getElementById('api-modal');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'api-modal';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    el.innerHTML = `
+      <div style="background:#1e1c19;border:1px solid #3a3530;border-radius:12px;width:100%;max-width:440px;max-height:88vh;display:flex;flex-direction:column;">
+        <div style="padding:14px 18px;border-bottom:1px solid #3a3530;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+          <span style="font-size:12px;color:#c8a96e;font-weight:700;letter-spacing:.08em">☁ API 설정</span>
+          <button onclick="closeAPISettings()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px">✕</button>
+        </div>
+        <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;flex:1">
+          <p style="font-size:11px;color:#888;margin:0">API 키를 직접 입력해서 클라우드 모델과 채팅합니다. 이 컴퓨터의 AnythingLLM/Ollama와는 무관하게, 브라우저에서 해당 서비스로 바로 요청을 보냅니다.</p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#e8e0d0">
+            <input id="api-enabled" type="checkbox"> API 채팅 사용
+          </label>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#888;font-weight:600">사용할 엔진</label>
+            <div id="api-engine-buttons" style="display:flex;gap:6px;flex-wrap:wrap">
+              <button type="button" data-engine="gemini" onclick="selectAPIEngine('gemini')" style="flex:1;min-width:70px;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 6px;font-size:12px;font-family:inherit;cursor:pointer">Gemini</button>
+              <button type="button" data-engine="claude" onclick="selectAPIEngine('claude')" style="flex:1;min-width:70px;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 6px;font-size:12px;font-family:inherit;cursor:pointer">Claude</button>
+              <button type="button" data-engine="custom" onclick="selectAPIEngine('custom')" style="flex:1;min-width:70px;background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 6px;font-size:12px;font-family:inherit;cursor:pointer">커스텀</button>
+            </div>
+            <div style="font-size:10px;color:#666">지금 대화에 실제로 쓰이는 건 여기서 고른 엔진 하나뿐이고, 나머지 키는 저장만 되어 있다가 필요할 때 전환할 수 있습니다.</div>
+          </div>
+
+          <div style="border-top:1px solid #3a3530;padding-top:10px;display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#c8a96e;font-weight:700">Gemini</label>
+            <input id="api-gemini-key" type="password" placeholder="API 키"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            <input id="api-gemini-model" type="text" placeholder="모델명 (기본: gemini-2.5-flash-lite)"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+          </div>
+
+          <div style="border-top:1px solid #3a3530;padding-top:10px;display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#c8a96e;font-weight:700">Claude</label>
+            <input id="api-claude-key" type="password" placeholder="API 키"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            <input id="api-claude-model" type="text" placeholder="모델명 (예: claude-sonnet-4-5)"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+          </div>
+
+          <div style="border-top:1px solid #3a3530;padding-top:10px;display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:11px;color:#c8a96e;font-weight:700">커스텀 (OpenAI 호환 — OpenAI·Groq·OpenRouter 등)</label>
+            <p style="font-size:10px;color:#666;margin:0">브라우저에서 직접 호출을 막아둔 서비스가 많아(대표적으로 OpenAI), 연결 실패 시 별도 프록시가 필요할 수 있습니다.</p>
+            <input id="api-custom-name" type="text" placeholder="이름 (예: OpenAI)"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            <input id="api-custom-endpoint" type="text" placeholder="엔드포인트 URL (예: https://api.openai.com/v1/chat/completions)"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            <input id="api-custom-key" type="password" placeholder="API 키"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+            <input id="api-custom-model" type="text" placeholder="모델명"
+              style="background:#2a2721;border:1px solid #3a3530;border-radius:6px;color:#e8e0d0;padding:8px 10px;font-size:12px;font-family:inherit;outline:none">
+          </div>
+
+          <button onclick="saveAPISettingsFromModal()" style="background:#c8a96e;color:#1a1714;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">저장</button>
+        </div>
+      </div>`;
+    el.addEventListener('click', e=>{ if(e.target===el) closeAPISettings(); });
+    document.body.appendChild(el);
+    fillAPISettingsModal();
+  } else {
+    el.style.display='flex';
+    fillAPISettingsModal();
+  }
+}
+function fillAPISettingsModal(){
+  document.getElementById('api-enabled').checked = !!wsAPI.enabled;
+  document.getElementById('api-gemini-key').value = wsAPI.providers.gemini.apiKey||'';
+  document.getElementById('api-gemini-model').value = wsAPI.providers.gemini.model||'';
+  document.getElementById('api-claude-key').value = wsAPI.providers.claude.apiKey||'';
+  document.getElementById('api-claude-model').value = wsAPI.providers.claude.model||'';
+  document.getElementById('api-custom-name').value = wsAPI.providers.custom.name||'';
+  document.getElementById('api-custom-endpoint').value = wsAPI.providers.custom.endpoint||'';
+  document.getElementById('api-custom-key').value = wsAPI.providers.custom.apiKey||'';
+  document.getElementById('api-custom-model').value = wsAPI.providers.custom.model||'';
+  highlightAPIEngineButton(wsAPI.activeProvider);
+}
+function highlightAPIEngineButton(id){
+  document.querySelectorAll('#api-engine-buttons button').forEach(btn=>{
+    const active = btn.dataset.engine === id;
+    btn.style.background = active ? '#c8a96e' : '#2a2721';
+    btn.style.color = active ? '#1a1714' : '#e8e0d0';
+    btn.style.fontWeight = active ? '700' : '400';
+  });
+}
+// 모달을 닫지 않고 엔진만 미리 바꿔볼 수 있게 함 — 실제 저장(활성 엔진 확정)은 저장 버튼을 눌러야 반영됨
+function selectAPIEngine(id){
+  highlightAPIEngineButton(id);
+  el_selectedEngine = id;
+}
+let el_selectedEngine = null;
+function closeAPISettings(){
+  const el=document.getElementById('api-modal');
+  if(el) el.style.display='none';
+  el_selectedEngine = null;
+}
+function saveAPISettingsFromModal(){
+  wsAPI.enabled = !!document.getElementById('api-enabled').checked;
+  if(el_selectedEngine) wsAPI.activeProvider = el_selectedEngine;
+  wsAPI.providers.gemini.apiKey = (document.getElementById('api-gemini-key').value||'').trim();
+  wsAPI.providers.gemini.model = (document.getElementById('api-gemini-model').value||'').trim();
+  wsAPI.providers.claude.apiKey = (document.getElementById('api-claude-key').value||'').trim();
+  wsAPI.providers.claude.model = (document.getElementById('api-claude-model').value||'').trim();
+  wsAPI.providers.custom.name = (document.getElementById('api-custom-name').value||'').trim();
+  wsAPI.providers.custom.endpoint = (document.getElementById('api-custom-endpoint').value||'').trim();
+  wsAPI.providers.custom.apiKey = (document.getElementById('api-custom-key').value||'').trim();
+  wsAPI.providers.custom.model = (document.getElementById('api-custom-model').value||'').trim();
+  saveWsAPI();
+  showToast(`API 설정 저장됨 (엔진: ${apiProviderLabel(wsAPI.activeProvider)})`);
+  renderAIFilterButtons();
+  closeAPISettings();
+}
+
 // 후보 목록 중 질의와 실제로 관련 있는 것만 로컬 LLM에게 골라달라고 요청.
 // 파싱 실패·호출 실패 시에는 원래 후보(candidates) 그대로 반환하는 안전한 폴백.
 async function filterRelevantByLLM(query, candidates){
@@ -2031,14 +2296,21 @@ async function filterRelevantByLLM(query, candidates){
 }
 
 function renderAIFilterButtons(){
+  // 검색결과 필터링(searchAIBtn 등)은 로컬 AI 전용 기능 그대로 유지 — API 채팅 활성화와는 무관.
   const show = !!wsLLM.enabled;
   const b1 = document.getElementById('searchAIBtn');
   const b2 = document.getElementById('resourceSearchAIBtn');
   if(b1) b1.style.display = show ? '' : 'none';
   if(b2) b2.style.display = show ? '' : 'none';
+  // 채팅 위젯 자체는 로컬 AI든 API든 하나라도 켜져 있으면 보인다 — 로컬 AI를 안 쓰고
+  // API만 쓰는 사용자(AnythingLLM을 자주 안 씀)도 채팅을 쓸 수 있어야 하기 때문.
   const chatWidget = document.getElementById('llmChatWidget');
-  if(chatWidget) chatWidget.style.display = show ? 'flex' : 'none';
-  if(show) refreshLLMWorkspaceOptions();
+  const showChat = !!wsLLM.enabled || !!wsAPI.enabled;
+  if(chatWidget) chatWidget.style.display = showChat ? 'flex' : 'none';
+  if(showChat){
+    if(wsLLM.enabled) refreshLLMWorkspaceOptions();
+    initChatTabUI();
+  }
 }
 
 // 워크스페이스 채팅용 AnythingLLM 연결은 위의 "기본 연결"(검색 필터용 endpoint/apiKey)과 완전히
@@ -2114,15 +2386,18 @@ async function refreshLLMWorkspaceOptions(){
   const wrap = document.getElementById('llmWorkspaceWrap');
   const labelEl = document.getElementById('llmWorkspaceBtnLabel');
   const uploadBtn = document.getElementById('llmChatUploadBtn');
+  const syncBtn = document.getElementById('llmChatSyncBtn');
   if(!wrap) return;
   const base = getAnythingLLMBase();
   if(!base){
     wrap.style.display = 'none';
     if(uploadBtn) uploadBtn.style.display = 'none';
+    if(syncBtn) syncBtn.style.display = 'none';
     return;
   }
   wrap.style.display = '';
   if(uploadBtn) uploadBtn.style.display = '';
+  if(syncBtn) syncBtn.style.display = '';
   if(labelEl) labelEl.textContent = '워크스페이스 불러오는 중…';
   try{
     const list = await fetchLLMWorkspaces();
@@ -2165,6 +2440,36 @@ async function uploadLLMChatFile(){
   }
 }
 
+// 집필실 자료(원고트리+대형자료실) 전체를 지금 선택된 AnythingLLM 워크스페이스에 업로드+임베딩.
+// 파일 업로드(uploadLLMChatFile)와 같은 API(/api/v1/document/upload + addToWorkspaces)를 그대로 재사용한다 —
+// 이 엔드포인트는 addToWorkspaces가 있으면 업로드와 동시에 그 워크스페이스에 임베딩까지 한 번에 끝낸다
+// (별도로 "임베드" 버튼을 다시 누를 필요 없음). 어느 워크스페이스로 보낼지는 항상 사용자가 고른 것만 쓰고
+// 자동으로 다른 워크스페이스까지 같이 올리지 않는다 — 로컬 전용 워크스페이스와 클라우드 API 워크스페이스가
+// 있을 때, 클라우드로 보내도 되는 자료인지는 사용자가 판단할 부분이기 때문.
+async function syncMaterialsToWorkspace(){
+  if(!wsLLM.chatWorkspace){ showToast('먼저 워크스페이스를 선택하세요'); return; }
+  const base = getAnythingLLMBase();
+  if(!base){ showToast('AnythingLLM 연동 주소가 설정되어 있지 않습니다.'); return; }
+  const label = llmWorkspaceLabel(wsLLM.chatWorkspace);
+  if(!confirm(`현재 프로젝트의 원고·캐릭터·설정·플롯·자료실 전체를 "${label}" 워크스페이스에 동기화할까요?\n\n동기화된 내용은 이 워크스페이스가 쓰는 모델에게 전달될 수 있습니다 — 로컬 모델이면 이 컴퓨터 안에서만 처리되고, 클라우드 API 모델이면 해당 서비스로 전송됩니다.`)) return;
+  appendLLMChatMessage('user', `🔄 (동기화 중) 집필실 자료 → "${label}" 워크스페이스`);
+  const text = buildExportText(true); // 검색 잡음을 줄이려고 【복선】 등 인라인 태그는 제거한 본문으로 보냄
+  const file = new File([new Blob([text],{type:'text/plain;charset=utf-8'})], `${safe(state.title)}_동기화_${new Date().toISOString().slice(0,10)}.txt`, {type:'text/plain'});
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('addToWorkspaces', wsLLM.chatWorkspace);
+  try{
+    const res = await fetch(`${base}/api/v1/document/upload`, { method:'POST', headers: anythingLLMAuthHeaders(), body: fd });
+    if(!res.ok) throw new Error(`동기화 실패 (${res.status})`);
+    const data = await res.json().catch(()=>({}));
+    if(data.success === false) throw new Error(data.error || '동기화 실패');
+    appendLLMChatMessage('assistant', `✅ 집필실 자료를 "${label}" 워크스페이스에 동기화했습니다. 이제 이 워크스페이스와의 대화에서 검색됩니다.`);
+  }catch(e){
+    appendLLMChatMessage('assistant', `⚠ ${e.message}`, {isError:true});
+  }
+}
+
+
 async function sendAnythingLLMWorkspaceChat(base, slug, message){
   const headers = anythingLLMAuthHeaders({ 'Content-Type': 'application/json' });
   let res;
@@ -2185,12 +2490,15 @@ async function sendAnythingLLMWorkspaceChat(base, slug, message){
   return stripThinkTags(data.textResponse);
 }
 
-let llmChatMessages = [];
-function appendLLMChatMessage(role, content, opts){
+// 로컬 AI 탭과 API 탭은 같은 채팅창(UI)을 공유하지만 대화 이력은 서로 분리한다 — 두 엔진은
+// 응답 스타일·속도·컨텍스트가 달라 한 이력에 섞으면 흐름이 어색해지기 때문(설계 단계에서 정한 원칙).
+let llmChatTab = null; // 'local' | 'api'
+let llmChatMessagesLocal = [];
+let llmChatMessagesAPI = [];
+function currentChatMessages(){ return llmChatTab==='api' ? llmChatMessagesAPI : llmChatMessagesLocal; }
+
+function appendMessageDiv(box, role, content, opts){
   opts = opts || {};
-  llmChatMessages.push({role, content});
-  const box = document.getElementById('llmChatMessages');
-  if(!box) return;
   const div = document.createElement('div');
   let style;
   if(opts.isError){
@@ -2203,8 +2511,57 @@ function appendLLMChatMessage(role, content, opts){
   div.style.cssText = style;
   div.textContent = content;
   box.appendChild(div);
+}
+function appendLLMChatMessage(role, content, opts){
+  opts = opts || {};
+  currentChatMessages().push({role, content, opts});
+  const box = document.getElementById('llmChatMessages');
+  if(!box) return;
+  appendMessageDiv(box, role, content, opts);
   box.scrollTop = box.scrollHeight;
 }
+function renderChatMessagesBox(){
+  const box = document.getElementById('llmChatMessages');
+  if(!box) return;
+  box.innerHTML = '';
+  currentChatMessages().forEach(m=> appendMessageDiv(box, m.role, m.content, m.opts));
+  box.scrollTop = box.scrollHeight;
+}
+function highlightChatTabButtons(){
+  const lb = document.getElementById('llmTabLocalBtn'), ab = document.getElementById('llmTabAPIBtn');
+  [[lb,'local'],[ab,'api']].forEach(([btn,id])=>{
+    if(!btn) return;
+    const active = llmChatTab===id;
+    btn.style.background = active ? '#c8a96e' : '#fff';
+    btn.style.color = active ? '#1a1714' : 'inherit';
+    btn.style.fontWeight = active ? '700' : '400';
+  });
+}
+function setChatTab(tab){
+  llmChatTab = tab;
+  try{ localStorage.setItem('ws_chat_tab', tab); }catch(e){}
+  const localRow = document.getElementById('llmLocalControlsRow');
+  const apiRow = document.getElementById('llmAPIControlsRow');
+  if(localRow) localRow.style.display = tab==='local' ? 'flex' : 'none';
+  if(apiRow) apiRow.style.display = tab==='api' ? 'flex' : 'none';
+  const engineLabel = document.getElementById('llmAPIEngineLabel');
+  if(engineLabel) engineLabel.textContent = `엔진: ${apiProviderLabel(wsAPI.activeProvider)}${wsAPI.enabled?'':' (꺼짐 — ⚙ 관리자 → API 설정에서 켜주세요)'}`;
+  highlightChatTabButtons();
+  renderChatMessagesBox();
+}
+// 위젯이 처음 보일 때 어느 탭으로 시작할지 고른다 — 마지막으로 쓰던 탭을 기억하되,
+// 그 엔진이 꺼져 있으면(설정을 아직 안 했거나 껐으면) 켜져 있는 쪽으로 자동 전환한다.
+function initChatTabUI(){
+  let tab = llmChatTab;
+  if(!tab){
+    try{ tab = localStorage.getItem('ws_chat_tab'); }catch(e){}
+  }
+  if(tab !== 'local' && tab !== 'api') tab = wsLLM.enabled ? 'local' : 'api';
+  if(tab==='local' && !wsLLM.enabled && wsAPI.enabled) tab = 'api';
+  if(tab==='api' && !wsAPI.enabled && wsLLM.enabled) tab = 'local';
+  setChatTab(tab);
+}
+
 async function sendLLMChat(){
   const input = document.getElementById('llmChatInput');
   const btn = document.getElementById('llmChatSendBtn');
@@ -2228,12 +2585,16 @@ async function sendLLMChat(){
   const waitTimer = setInterval(tickWaitDiv, 1000);
   if(box){ box.appendChild(waitDiv); box.scrollTop = box.scrollHeight; }
   try{
-    const base = getAnythingLLMBase();
     let reply;
-    if(base && wsLLM.chatWorkspace){
-      reply = await sendAnythingLLMWorkspaceChat(base, wsLLM.chatWorkspace, text);
+    if(llmChatTab === 'api'){
+      reply = await callAPILLM(llmChatMessagesAPI.map(m => ({role: m.role, content: m.content})));
     }else{
-      reply = await callLocalLLM(llmChatMessages.map(m => ({role: m.role, content: m.content})));
+      const base = getAnythingLLMBase();
+      if(base && wsLLM.chatWorkspace){
+        reply = await sendAnythingLLMWorkspaceChat(base, wsLLM.chatWorkspace, text);
+      }else{
+        reply = await callLocalLLM(llmChatMessagesLocal.map(m => ({role: m.role, content: m.content})));
+      }
     }
     appendLLMChatMessage('assistant', reply);
   }catch(e){
