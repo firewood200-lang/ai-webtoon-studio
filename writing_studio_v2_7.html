@@ -229,7 +229,13 @@ header input{width:190px}
   <div id="searchResults" class="small">검색어를 입력하세요.</div>
 
   <div class="card" id="llmChatWidget" style="margin-top:12px;display:none;flex-direction:column;flex:1;min-height:260px">
-    <div class="section-title">🖥 AI 채팅</div>
+    <div class="section-title">
+      <span>🖥 AI 채팅</span>
+      <span style="display:flex;gap:4px">
+        <button type="button" onclick="copyAllChatMessages()" title="지금 탭의 전체 대화 내용을 복사합니다" style="font-size:11px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;color:var(--muted)">📋 전체 복사</button>
+        <button type="button" onclick="clearCurrentChat()" title="지금 보고 있는 탭의 대화만 지웁니다 (앱 새로고침 없이 토큰 비용도 초기화됨). 시나리오 작업 내용에는 영향 없습니다." style="font-size:11px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;color:var(--muted)">🔄 새 대화</button>
+      </span>
+    </div>
     <div style="display:flex;gap:4px;margin-bottom:8px">
       <button type="button" id="llmTabLocalBtn" onclick="setChatTab('local')" style="flex:1;font-size:12px;padding:6px 7px;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-family:inherit">🖥 로컬 AI</button>
       <button type="button" id="llmTabAPIBtn" onclick="setChatTab('api')" style="flex:1;font-size:12px;padding:6px 7px;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-family:inherit">☁ API</button>
@@ -250,8 +256,11 @@ header input{width:190px}
       <span id="llmAPIUsageLabel" class="small" style="color:var(--muted)"></span>
     </div>
     <div id="llmChatMessages" style="flex:1;min-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
-    <div style="display:flex;gap:4px">
-      <input id="llmChatInput" placeholder="메시지 입력" style="flex:1;font-size:14px;padding:9px 11px" onkeydown="if(event.key==='Enter'&&!event.isComposing)sendLLMChat()">
+    <div style="display:flex;gap:4px;align-items:flex-end">
+      <textarea id="llmChatInput" placeholder="메시지 입력 (Shift+Enter: 줄바꿈)" rows="1"
+        style="flex:1;font-size:14px;padding:9px 11px;font-family:inherit;resize:none;line-height:1.4;max-height:120px;overflow-y:auto"
+        oninput="autoResizeChatInput(this)"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();sendLLMChat();}"></textarea>
       <button id="llmChatSendBtn" onclick="sendLLMChat()" style="font-size:14px;padding:9px 15px">전송</button>
     </div>
   </div>
@@ -2670,35 +2679,197 @@ let llmChatMessagesLocal = [];
 let llmChatMessagesAPI = [];
 function currentChatMessages(){ return llmChatTab==='api' ? llmChatMessagesAPI : llmChatMessagesLocal; }
 
-function appendMessageDiv(box, role, content, opts){
+// 메시지 하나를 말풍선(.llm-msg-bubble) + 그 아래 액션 버튼 줄(.llm-msg-actions)로 그린다.
+// idx는 currentChatMessages() 배열에서의 위치 — 복사/편집/재전송/읽기모드가 정확히 그 메시지를
+// 가리키게 하기 위해 필요하다(렌더링 시점의 배열 인덱스와 항상 일치시킨다).
+// opts.isError(시스템 오류 안내)에는 idx를 넘기지 않아 액션 버튼과 더블클릭 읽기모드를 뺀다 —
+// 재전송·편집 대상이 될 실제 대화 내용이 아니기 때문.
+function appendMessageDiv(box, role, content, opts, idx){
   opts = opts || {};
-  const div = document.createElement('div');
-  let style;
+  const row = document.createElement('div');
+  row.className = 'llm-msg-row';
+  if(idx!=null) row.dataset.idx = idx;
+  row.style.cssText = `display:flex;flex-direction:column;max-width:88%;align-self:${(role==='user'&&!opts.isError)?'flex-end':'flex-start'}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'llm-msg-bubble';
+  let bstyle;
   if(opts.isError){
-    style = 'align-self:flex-start;background:#fbe4e0;color:#7a2f22;border:1px solid #e0b3a8;border-radius:8px;padding:7px 11px;max-width:88%;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
+    bstyle = 'background:#fbe4e0;color:#7a2f22;border:1px solid #e0b3a8;border-radius:8px;padding:7px 11px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
   }else if(role==='user'){
-    style = 'align-self:flex-end;background:var(--accent);color:#fff;border-radius:8px;padding:7px 11px;max-width:88%;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
+    bstyle = 'background:var(--accent);color:#fff;border-radius:8px;padding:7px 11px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
   }else{
-    style = 'align-self:flex-start;background:#f2ece0;border-radius:8px;padding:7px 11px;max-width:88%;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
+    bstyle = 'background:#f2ece0;border-radius:8px;padding:7px 11px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word';
   }
-  div.style.cssText = style;
-  div.textContent = content;
-  box.appendChild(div);
+  bubble.style.cssText = bstyle;
+  bubble.textContent = content;
+  row.appendChild(bubble);
+
+  if(!opts.isError && idx!=null){
+    bubble.style.cursor = 'pointer';
+    bubble.title = '더블클릭하면 크게 볼 수 있습니다';
+    bubble.ondblclick = ()=> openReadingMode(idx);
+
+    const actions = document.createElement('div');
+    actions.className = 'llm-msg-actions';
+    actions.style.cssText = 'display:flex;gap:8px;margin-top:2px;padding:0 2px';
+    const mkBtn = (label, fn, title)=>{
+      const b = document.createElement('button');
+      b.type='button'; b.textContent=label; if(title) b.title=title;
+      b.style.cssText = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:0;font-family:inherit;text-decoration:underline';
+      b.onclick = fn;
+      return b;
+    };
+    actions.appendChild(mkBtn('복사', ()=>copyChatMessage(idx), '이 메시지만 복사'));
+    if(role==='user'){
+      actions.appendChild(mkBtn('편집', ()=>editChatMessage(idx), '이 메시지 내용을 고칩니다 (자동으로 다시 보내지 않습니다)'));
+      actions.appendChild(mkBtn('재전송', ()=>resendChatMessage(idx), '이 질문을 다시 보내고 새 답변을 받습니다 — 이후 대화는 사라집니다'));
+    }
+    row.appendChild(actions);
+  }
+  box.appendChild(row);
 }
 function appendLLMChatMessage(role, content, opts){
   opts = opts || {};
-  currentChatMessages().push({role, content, opts});
+  const list = currentChatMessages();
+  list.push({role, content, opts});
   const box = document.getElementById('llmChatMessages');
   if(!box) return;
-  appendMessageDiv(box, role, content, opts);
+  appendMessageDiv(box, role, content, opts, list.length-1);
   box.scrollTop = box.scrollHeight;
 }
 function renderChatMessagesBox(){
   const box = document.getElementById('llmChatMessages');
   if(!box) return;
   box.innerHTML = '';
-  currentChatMessages().forEach(m=> appendMessageDiv(box, m.role, m.content, m.opts));
+  currentChatMessages().forEach((m,i)=> appendMessageDiv(box, m.role, m.content, m.opts, i));
   box.scrollTop = box.scrollHeight;
+}
+// 앱 새로고침 없이 채팅 대화만 초기화 — API 탭은 매 호출마다 지금까지의 대화 전체를 다시
+// 보내는 구조라(callAPILLM 호출부 참고) 대화가 길어질수록 호출당 비용이 늘어난다. 이 버튼으로
+// 대화만 끊으면 시나리오 편집 등 앱의 다른 작업 상태는 그대로 두고 다음 질문부터 다시 저렴해진다.
+// 지금 보고 있는 탭(로컬/API)의 이력만 지우고, 반대쪽 탭 대화는 그대로 남겨둔다.
+function clearCurrentChat(){
+  if(!llmChatTab) return;
+  const list = currentChatMessages();
+  if(!list.length) return;
+  if(!confirm('지금 탭의 대화 내용을 지울까요? 이후 질문은 새 대화로 취급되어 이전 내용을 기억하지 못합니다.')) return;
+  list.length = 0;
+  renderChatMessagesBox();
+  showToast('대화를 초기화했습니다.');
+}
+async function copyChatMessage(idx){
+  const msg = currentChatMessages()[idx];
+  if(!msg) return;
+  try{
+    await navigator.clipboard.writeText(msg.content);
+    showToast('메시지를 복사했습니다.');
+  }catch(e){
+    showToast('복사에 실패했습니다 — 브라우저 클립보드 권한을 확인해주세요.');
+  }
+}
+async function copyAllChatMessages(){
+  const list = currentChatMessages();
+  if(!list.length){ showToast('복사할 대화가 없습니다.'); return; }
+  const text = list.filter(m=>!m.opts?.isError).map(m=>`${m.role==='user'?'나':'AI'}: ${m.content}`).join('\n\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast('전체 대화를 복사했습니다.');
+  }catch(e){
+    showToast('복사에 실패했습니다 — 브라우저 클립보드 권한을 확인해주세요.');
+  }
+}
+// 편집은 텍스트만 고쳐서 저장할 뿐, 자동으로 다시 묻지 않는다(재전송과 역할을 분리) — 고친 뒤
+// 이어서 재전송 버튼을 누르면 그 시점부터 새로 대화가 이어진다.
+function editChatMessage(idx){
+  const msg = currentChatMessages()[idx];
+  if(!msg) return;
+  const box = document.getElementById('llmChatMessages');
+  const row = box && box.querySelector(`.llm-msg-row[data-idx="${idx}"]`);
+  if(!row) return;
+  const bubble = row.querySelector('.llm-msg-bubble');
+  const actions = row.querySelector('.llm-msg-actions');
+  if(!bubble) return;
+  const ta = document.createElement('textarea');
+  ta.value = msg.content;
+  ta.style.cssText = 'width:100%;min-height:60px;font-size:14px;font-family:inherit;line-height:1.45;padding:7px 9px;border-radius:8px;border:1px solid var(--line);resize:vertical;box-sizing:border-box';
+  bubble.replaceWith(ta);
+  ta.focus();
+  if(actions) actions.style.display = 'none';
+  const editBar = document.createElement('div');
+  editBar.style.cssText = 'display:flex;gap:6px;margin-top:4px';
+  const saveBtn = document.createElement('button');
+  saveBtn.type='button'; saveBtn.textContent='저장';
+  saveBtn.style.cssText = 'font-size:11px;padding:3px 10px;border:1px solid var(--line);border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-family:inherit';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type='button'; cancelBtn.textContent='취소';
+  cancelBtn.style.cssText = 'font-size:11px;padding:3px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font-family:inherit';
+  saveBtn.onclick = ()=>{
+    const v = ta.value.trim();
+    if(!v){ showToast('내용을 입력해주세요.'); return; }
+    msg.content = v;
+    renderChatMessagesBox();
+    showToast('메시지를 수정했습니다.');
+  };
+  cancelBtn.onclick = ()=> renderChatMessagesBox();
+  editBar.appendChild(saveBtn); editBar.appendChild(cancelBtn);
+  row.appendChild(editBar);
+}
+// 이 질문을 이 시점부터 다시 보낸다 — 이 메시지 이후의 대화(이 메시지 포함)를 배열에서 지우고
+// 같은 텍스트로 새로 요청한다. AnythingLLM 워크스페이스 모드는 대화 이력을 서버가 들고 있어
+// 우리 쪽에서 "이후 대화 삭제"가 그쪽 컨텍스트에는 반영되지 않을 수 있음을 안내에 포함한다.
+async function resendChatMessage(idx){
+  const list = currentChatMessages();
+  const msg = list[idx];
+  if(!msg || msg.role!=='user') return;
+  if(!confirm('이 질문을 다시 보낼까요? 이 질문 이후의 대화 내용은 모두 사라집니다.')) return;
+  const text = msg.content;
+  list.splice(idx);
+  renderChatMessagesBox();
+  await submitUserText(text);
+}
+// 읽기 모드 — 메시지를 큰 글씨의 모달 창으로 띄운다(브라우저 팝업 창은 팝업 차단에 걸릴 수 있어
+// 기존 설정 모달들과 같은 오버레이 방식을 그대로 따랐다).
+function openReadingMode(idx){
+  const msg = currentChatMessages()[idx];
+  if(!msg) return;
+  let el = document.getElementById('llm-read-modal');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'llm-read-modal';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+    el.innerHTML = `
+      <div style="background:#fff;border-radius:12px;width:100%;max-width:760px;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.3)">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+          <span id="llm-read-modal-role" style="font-size:13px;font-weight:700;color:var(--muted)">읽기 모드</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button type="button" onclick="copyReadingModeMessage()" style="font-size:12px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font-family:inherit">복사</button>
+            <button type="button" onclick="closeReadingMode()" style="background:none;border:none;font-size:20px;cursor:pointer;line-height:1;color:#888">✕</button>
+          </div>
+        </div>
+        <div id="llm-read-modal-body" style="padding:22px 26px;overflow-y:auto;font-size:19px;line-height:1.8;white-space:pre-wrap;word-break:break-word"></div>
+      </div>`;
+    el.addEventListener('click', e=>{ if(e.target===el) closeReadingMode(); });
+    document.body.appendChild(el);
+  }
+  el.dataset.idx = idx;
+  document.getElementById('llm-read-modal-role').textContent = (msg.role==='user' ? '나의 메시지' : 'AI 응답') + ' · 읽기 모드';
+  document.getElementById('llm-read-modal-body').textContent = msg.content;
+  el.style.display = 'flex';
+}
+function closeReadingMode(){
+  const el = document.getElementById('llm-read-modal');
+  if(el) el.style.display = 'none';
+}
+function copyReadingModeMessage(){
+  const el = document.getElementById('llm-read-modal');
+  if(!el) return;
+  copyChatMessage(Number(el.dataset.idx));
+}
+// 입력창(textarea)이 줄바꿈(Shift+Enter)에 맞춰 자동으로 늘어나게(최대 120px, 그 이상은 스크롤).
+function autoResizeChatInput(el){
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 function highlightChatTabButtons(){
   const lb = document.getElementById('llmTabLocalBtn'), ab = document.getElementById('llmTabAPIBtn');
@@ -2734,15 +2905,13 @@ function initChatTabUI(){
   setChatTab(tab);
 }
 
-async function sendLLMChat(){
+// 실제 전송(질문 추가 → 대기 표시 → 로컬/API 호출 → 응답 또는 오류 추가)을 한 곳에 모아서
+// sendLLMChat(입력창에서 새로 보낼 때)과 resendChatMessage(과거 질문 재전송)가 함께 쓴다(원칙 10).
+async function submitUserText(text){
   const input = document.getElementById('llmChatInput');
   const btn = document.getElementById('llmChatSendBtn');
-  if(!input) return;
-  const text = input.value.trim();
-  if(!text) return;
-  input.value = '';
   appendLLMChatMessage('user', text);
-  input.disabled = true; if(btn) btn.disabled = true;
+  if(input) input.disabled = true; if(btn) btn.disabled = true;
   const box = document.getElementById('llmChatMessages');
   const waitDiv = document.createElement('div');
   waitDiv.id = 'llmChatWaiting';
@@ -2774,9 +2943,18 @@ async function sendLLMChat(){
   }finally{
     clearInterval(waitTimer);
     const w = document.getElementById('llmChatWaiting'); if(w) w.remove();
-    input.disabled = false; if(btn) btn.disabled = false;
-    input.focus();
+    if(input){ input.disabled = false; input.focus(); }
+    if(btn) btn.disabled = false;
   }
+}
+async function sendLLMChat(){
+  const input = document.getElementById('llmChatInput');
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+  input.value = '';
+  autoResizeChatInput(input);
+  await submitUserText(text);
 }
 
 loadLocal(); render();
