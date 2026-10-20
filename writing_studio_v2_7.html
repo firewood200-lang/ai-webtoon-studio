@@ -171,6 +171,7 @@ header input{width:190px}
   <button onclick="document.getElementById(&#39;fileInput&#39;).click()" id="btnJsonLoad">JSON 불러오기</button>
   <button onclick="exportTXT(false)">TXT 출력</button>
   <button onclick="exportTXT(true)" title="【태그】 제거 후 출력">TXT(태그제거)</button>
+  <button onclick="openNotionScenario()" title="집필실 폴더의 원고를 노션에 저장(바뀐 회차만 갱신)">📤 노션 저장</button>
   <div class="admin-dropdown" id="adminDropdown">
     <button onclick="toggleAdminMenu(event)" title="관리자 설정">⚙ 관리자</button>
     <div class="admin-menu">
@@ -4004,6 +4005,316 @@ fetch('/version.json?_=' + Date.now())
   .then(r => r.json())
   .then(d => { document.getElementById('buildVersion').textContent = '배포 ' + d.built; })
   .catch(() => {});
+</script>
+<script>
+// ── 노션 시나리오 저장 (2026-10-21 추가) ──
+// 집필실 폴더의 문서만 노션 "작품명 — 시나리오" 페이지 아래 회차별 하위 페이지로 저장한다.
+// 다시 저장하면 바뀐 회차만 같은 페이지 안에서 내용을 교체한다(페이지 링크·순서 유지).
+// 노션 연결은 "리서치 불러오기"와 같은 토큰·중계 주소(wsNotion)를 쓴다. 원고 데이터(state.nodes)는 바꾸지 않고,
+// 노션 연결 기록만 state.notionScenario에 남긴다.
+(function(){
+  const NS_COLORS = { gray:[155,154,151], brown:[100,71,58], orange:[217,115,13], yellow:[223,171,1], green:[15,123,108], blue:[11,110,153], purple:[105,64,165], pink:[173,26,114], red:[224,62,62] };
+  const TAG_BG = { '형광펜':'yellow_background', '복선':'blue_background', '단서':'green_background', '회수':'purple_background', '반전':'red_background', '주의':'orange_background' };
+  const MAX_TEXT = 1900, MAX_RICH = 90;
+
+  function nsState(){ state.notionScenario = state.notionScenario || { parent:'', pageId:'', headerIds:[], docs:{}, savedAt:'' }; state.notionScenario.docs = state.notionScenario.docs || {}; return state.notionScenario; }
+  function pageIdFrom(s){ const m=String(s||'').replace(/-/g,'').match(/[0-9a-f]{32}/i); return m ? m[0].replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5') : ''; }
+  function scenarioFolder(){
+    const tops = state.nodes.filter(n=>!n.parent && n.kind==='folder');
+    return tops.find(n=>n.section==='a') || tops.find(n=>/집필실/.test(n.title)) || null;
+  }
+  // 집필실 아래 문서를 트리 순서대로 (하위 폴더는 제목 앞에 "폴더 › "로 붙인다)
+  function scenarioDocs(){
+    const root = scenarioFolder(); if(!root) return [];
+    const out=[];
+    (function walk(pid, path){
+      childrenOf(pid).forEach(n=>{
+        if(n.kind==='folder'){ walk(n.id, path.concat(n.title)); return; }
+        out.push({ node:n, title: path.concat(n.title).join(' › ') });
+        if(childrenOf(n.id).length) walk(n.id, path.concat(n.title));
+      });
+    })(root.id, []);
+    return out;
+  }
+  function hashOf(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return (h>>>0).toString(36); }
+  function docHash(d){ return hashOf([d.title, d.node.status||'', d.node.body||'', d.node.memo||''].join('\u0001')); }
+
+  // ───── HTML 본문 → 노션 블록 ─────
+  function nearestColor(css){
+    const m = String(css||'').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/) || null;
+    let rgb=null;
+    if(m) rgb=[+m[1],+m[2],+m[3]];
+    else { const h=String(css||'').trim().replace('#',''); if(/^[0-9a-f]{6}$/i.test(h)) rgb=[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; else if(/^[0-9a-f]{3}$/i.test(h)) rgb=h.split('').map(c=>parseInt(c+c,16)); }
+    if(!rgb) return 'default';
+    const lum=(rgb[0]+rgb[1]+rgb[2])/3, spread=Math.max(...rgb)-Math.min(...rgb);
+    if(spread<25 && lum<90) return 'default';   // 검정 계열 = 기본색
+    if(spread<25) return 'gray';
+    let best='default', bd=1e9;
+    for(const [k,v] of Object.entries(NS_COLORS)){ const d=(v[0]-rgb[0])**2+(v[1]-rgb[1])**2+(v[2]-rgb[2])**2; if(d<bd){bd=d;best=k;} }
+    return best;
+  }
+  // DOM을 훑어 [ {type:'p'|'h1'|'h2'|'h3', runs:[{text, b,i,u,s,color}]} ] 로 만든다
+  function htmlToParas(html){
+    const box=document.createElement('div'); box.innerHTML=html||'';
+    const paras=[]; let cur=null;
+    const start=(type)=>{ cur={type:type||'p', runs:[]}; paras.push(cur); };
+    const push=(text,st)=>{ if(!cur) start('p'); if(!text) return; cur.runs.push(Object.assign({text},st)); };
+    const BLOCK=/^(DIV|P|H1|H2|H3|H4|H5|H6|LI|BLOCKQUOTE|PRE|UL|OL|TABLE|TR)$/;
+    (function walk(el, st){
+      for(const n of el.childNodes){
+        if(n.nodeType===3){ push(n.nodeValue.replace(/ /g,' '), st); continue; }
+        if(n.nodeType!==1) continue;
+        const t=n.tagName;
+        if(t==='BR'){ push('\n', st); continue; }
+        const s=Object.assign({},st);
+        if(t==='B'||t==='STRONG') s.b=true;
+        if(t==='I'||t==='EM') s.i=true;
+        if(t==='U') s.u=true;
+        if(t==='S'||t==='STRIKE'||t==='DEL') s.s=true;
+        const css=n.getAttribute('style')||'';
+        if(/font-weight:\s*(bold|[6-9]00)/.test(css)) s.b=true;
+        if(/font-style:\s*italic/.test(css)) s.i=true;
+        if(/text-decoration[^;]*underline/.test(css)) s.u=true;
+        if(/text-decoration[^;]*line-through/.test(css)) s.s=true;
+        const col = n.getAttribute('color') || (css.match(/(?:^|;)\s*color:\s*([^;]+)/)||[])[1];
+        if(col){ const c=nearestColor(col); s.color = c==='default' ? undefined : c; }
+        if(BLOCK.test(t)){
+          const type = /^H[1-3]$/.test(t) ? t.toLowerCase() : (/^H[4-6]$/.test(t) ? 'h3' : 'p');
+          start(type); walk(n, s); cur=null;
+        } else walk(n, s);
+      }
+    })(box, {});
+    // 빈 문단 정리 + 문단 끝 줄바꿈 제거
+    return paras.map(p=>{ while(p.runs.length && /^\n*$/.test(p.runs[p.runs.length-1].text)) p.runs.pop(); return p; });
+  }
+  // 태그 [복선]…[/복선] 구간에 배경색, 태그 표시는 회색 글자로 남긴다
+  function applyTags(runs, tagState){
+    const re=new RegExp(`\\[(/?)(${TAG_NAMES.join('|')})\\d*\\]`,'g');
+    const out=[];
+    for(const r of runs){
+      let last=0, m; re.lastIndex=0;
+      const emit=(text, extra)=>{ if(!text) return; const bg = tagState.length ? TAG_BG[tagState[tagState.length-1]] : null; out.push(Object.assign({}, r, {text}, bg ? {bg} : {}, extra||{})); };
+      while((m=re.exec(r.text))){
+        emit(r.text.slice(last, m.index));
+        emit(m[0], { color:'gray', bg:null, tag:true });
+        if(m[1]) { const i=tagState.lastIndexOf(m[2]); if(i>=0) tagState.splice(i,1); } else tagState.push(m[2]);
+        last=re.lastIndex;
+      }
+      emit(r.text.slice(last));
+    }
+    return out;
+  }
+  function richItem(r){
+    const a={}; if(r.b)a.bold=true; if(r.i)a.italic=true; if(r.u)a.underline=true; if(r.s)a.strikethrough=true;
+    const color = r.bg ? r.bg : (r.color && r.color!=='default' ? r.color : null); if(color) a.color=color;
+    return { type:'text', text:{ content:r.text }, annotations:a };
+  }
+  // 문단들을 노션 블록으로 묶는다: 연속된 일반 문단은 한 블록 안에서 "\n\n"으로 이어 블록 수를 줄인다(갱신 속도)
+  function parasToBlocks(paras){
+    const blocks=[]; let curRich=null; const tagState=[];
+    const flush=()=>{ if(curRich && curRich.length) blocks.push({ object:'block', type:'paragraph', paragraph:{ rich_text:curRich } }); curRich=null; };
+    const addRuns=(rich, runs)=>{ for(const r of runs){ for(let i=0;i<r.text.length;i+=MAX_TEXT) rich.push(richItem(Object.assign({}, r, {text:r.text.slice(i,i+MAX_TEXT)}))); } };
+    for(const p of paras){
+      const runs=applyTags(p.runs, tagState);
+      if(p.type!=='p'){ flush(); const rich=[]; addRuns(rich, runs); if(rich.length){ const k='heading_'+p.type.slice(1); blocks.push({ object:'block', type:k, [k]:{ rich_text:rich.slice(0,MAX_RICH) } }); } continue; }
+      const rich=[]; addRuns(rich, runs);
+      if(curRich && curRich.length + rich.length + 1 > MAX_RICH) flush();
+      if(!curRich) curRich=[]; else curRich.push({ type:'text', text:{content:'\n\n'} });
+      if(!rich.length){ curRich.push({type:'text',text:{content:''}}); continue; }
+      while(rich.length > MAX_RICH){ flush(); blocks.push({ object:'block', type:'paragraph', paragraph:{ rich_text:rich.splice(0,MAX_RICH) } }); curRich=[]; }
+      curRich.push(...rich);
+    }
+    flush();
+    return blocks.map(b=>{ const k=b.type; b[k].rich_text=b[k].rich_text.filter((x,i,arr)=>!(x.text.content==='' && arr.length>1)); return b; });
+  }
+  function docBlocks(d){
+    const n=d.node;
+    const info={ object:'block', type:'paragraph', paragraph:{ rich_text:[{ type:'text', text:{ content:`상태: ${n.status||'-'} · 집필실에서 저장: ${new Date().toLocaleString('ko-KR')}` }, annotations:{ color:'gray' } }] } };
+    const body=parasToBlocks(htmlToParas(n.body||''));
+    const out=[info, { object:'block', type:'divider', divider:{} }, ...body];
+    if(String(n.memo||'').trim()){
+      const memo=String(n.memo); const rich=[{type:'text',text:{content:'메모\n'},annotations:{bold:true}}];
+      for(let i=0;i<memo.length;i+=MAX_TEXT) rich.push({type:'text',text:{content:memo.slice(i,i+MAX_TEXT)}});
+      out.push({ object:'block', type:'callout', callout:{ icon:{type:'emoji',emoji:'📝'}, color:'gray_background', rich_text:rich.slice(0,MAX_RICH) } });
+    }
+    return out;
+  }
+
+  // ───── 노션 요청 (중계 서버 경유, 속도 제한 대응) ─────
+  let lastCall=0;
+  async function nreq(method, path, body){
+    const proxy=(wsNotion.proxy||'https://notion-proxy.firewood2000.workers.dev').replace(/\/+$/,'');
+    for(let attempt=0; attempt<4; attempt++){
+      const wait=Math.max(0, 360-(Date.now()-lastCall)); if(wait) await new Promise(r=>setTimeout(r,wait));
+      lastCall=Date.now();
+      let res;
+      try{ res=await fetch(proxy+path,{ method, headers:{ 'X-Notion-Key':wsNotion.token, 'Content-Type':'application/json' }, body: body?JSON.stringify(body):undefined }); }
+      catch(e){ if(attempt<3){ await new Promise(r=>setTimeout(r,1500)); continue; } throw new Error('네트워크 오류: '+e.message); }
+      if(res.status===429 || res.status>=500){ const ra=Number(res.headers.get('Retry-After'))||2; await new Promise(r=>setTimeout(r, ra*1000)); continue; }
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok){ const err=new Error(`(${res.status}) ${data.message||data.error||res.statusText}`); err.status=res.status; err.code=data.code; throw err; }
+      return data;
+    }
+    throw new Error('노션 서버가 응답하지 않습니다. 잠시 후 다시 시도해 주세요.');
+  }
+  async function appendBlocks(parentId, blocks, ids){
+    ids=ids||[];
+    for(let i=0;i<blocks.length;i+=90){
+      const r=await nreq('PATCH', `/v1/blocks/${parentId}/children`, { children:blocks.slice(i,i+90) });
+      (r.results||[]).forEach(b=>ids.push(b.id));
+    }
+    return ids;
+  }
+  async function archiveBlocks(ids, onTick){
+    for(const id of ids||[]){
+      try{ await nreq('PATCH', `/v1/blocks/${id}`, { archived:true }); }
+      catch(e){ if(e.status!==404 && !/archived/i.test(e.message)) throw e; }
+      if(onTick) onTick();
+    }
+  }
+  const titleProp=(t)=>({ title:{ title:[{ text:{ content:String(t).slice(0,200) } }] } });
+
+  function headerBlocksRich(docs){
+    const ns=nsState();
+    const head=[{type:'text',text:{content:`집필실 원고를 Writing Studio에서 저장한 페이지입니다. 마지막 저장: ${new Date().toLocaleString('ko-KR')} · 회차 ${docs.length}개\n\n`},annotations:{color:'gray'}},{type:'text',text:{content:'목차\n'},annotations:{bold:true}}];
+    const items=[];
+    docs.forEach(d=>{ const rec=ns.docs[d.node.id]; if(rec && rec.pageId){ items.push({type:'mention',mention:{type:'page',page:{id:rec.pageId}}}); items.push({type:'text',text:{content:'\n'}}); } else items.push({type:'text',text:{content:d.title+'\n'}}); });
+    const groups=[]; let curr=head.slice();
+    for(const it of items){ if(curr.length>=MAX_RICH){ groups.push(curr); curr=[]; } curr.push(it); }
+    groups.push(curr);
+    return groups;
+  }
+  async function writeHeader(docs){
+    const ns=nsState(); const groups=headerBlocksRich(docs);
+    const ids=ns.headerIds||[];
+    for(let i=0;i<groups.length;i++){
+      if(ids[i]){ try{ await nreq('PATCH', `/v1/blocks/${ids[i]}`, { paragraph:{ rich_text:groups[i] } }); continue; } catch(e){ if(e.status!==404 && e.status!==400) throw e; } }
+      const added=await appendBlocks(ns.pageId, [{object:'block',type:'paragraph',paragraph:{rich_text:groups[i]}}]); ids[i]=added[0];
+    }
+    for(let i=groups.length;i<ids.length;i++){ await nreq('PATCH', `/v1/blocks/${ids[i]}`, { paragraph:{ rich_text:[] } }).catch(()=>{}); }
+    ns.headerIds=ids.slice(0, Math.max(groups.length, ids.length));
+  }
+
+  // ───── 저장 실행 ─────
+  let running=false;
+  async function run(onlyFailed){
+    if(running) return; running=true;
+    const ns=nsState(); const docs=scenarioDocs();
+    const logEl=document.getElementById('nsLog'), barEl=document.getElementById('nsBar');
+    const log=(t)=>{ if(logEl){ logEl.textContent+=t+'\n'; logEl.scrollTop=logEl.scrollHeight; } };
+    const result={ created:0, updated:0, same:0, removed:0, failed:[] };
+    try{
+      if(!wsNotion.token) throw new Error('노션 토큰을 입력해 주세요.');
+      const parent=pageIdFrom(ns.parent); if(!parent && !ns.pageId) throw new Error('저장할 노션 페이지 주소를 입력해 주세요.');
+      const title=`${state.title} — 시나리오`;
+      // 1) 시나리오 페이지
+      if(ns.pageId){
+        try{ const p=await nreq('PATCH', `/v1/pages/${ns.pageId}`, { properties:titleProp(title) }); if(p.archived||p.in_trash) throw Object.assign(new Error('휴지통'),{status:404}); }
+        catch(e){ if(e.status===404||e.status===400){ log('노션에서 시나리오 페이지를 찾을 수 없어 새로 만듭니다.'); ns.pageId=''; ns.headerIds=[]; ns.docs={}; } else throw e; }
+      }
+      if(!ns.pageId){
+        const p=await nreq('POST','/v1/pages',{ parent:{ page_id:parent }, icon:{type:'emoji',emoji:'📘'}, properties:titleProp(title) });
+        ns.pageId=p.id; ns.url=p.url; ns.headerIds=[]; saveLocal(); log('시나리오 페이지를 만들었습니다.');
+        await writeHeader(docs); saveLocal();
+      }
+      // 2) 회차
+      const todo=docs.filter(d=>{ const rec=ns.docs[d.node.id]; return onlyFailed ? (rec && rec.failed) : (!rec || !rec.pageId || rec.hash!==docHash(d) || rec.failed); });
+      result.same=docs.length-todo.length;
+      let k=0;
+      for(const d of todo){
+        k++; if(barEl) barEl.style.width=Math.round(k/Math.max(1,todo.length)*100)+'%';
+        log(`[${k}/${todo.length}] ${d.title}`);
+        const rec=ns.docs[d.node.id]||{};
+        try{
+          const blocks=docBlocks(d);
+          let isNew=!rec.pageId;
+          if(!isNew){
+            try{ const p=await nreq('PATCH', `/v1/pages/${rec.pageId}`, { properties:titleProp(d.title) }); if(p.archived||p.in_trash) isNew=true; }
+            catch(e){ if(e.status===404||e.status===400) isNew=true; else throw e; }
+          }
+          if(isNew){
+            const p=await nreq('POST','/v1/pages',{ parent:{ page_id:ns.pageId }, properties:titleProp(d.title) });
+            rec.pageId=p.id; rec.blockIds=[]; result.created++;
+          } else {
+            await archiveBlocks(rec.blockIds); result.updated++;
+          }
+          rec.blockIds=[]; ns.docs[d.node.id]=rec;
+          await appendBlocks(rec.pageId, blocks, rec.blockIds);   // 중간에 실패해도 만든 블록 번호가 남아 다음 저장 때 정리된다
+          rec.hash=docHash(d); rec.savedAt=new Date().toISOString(); rec.failed=false;
+          ns.docs[d.node.id]=rec; saveLocal();
+        }catch(e){
+          rec.failed=true; ns.docs[d.node.id]=rec; saveLocal();
+          result.failed.push(`${d.title} — ${e.message}`); log('  실패: '+e.message);
+          if(e.status===401) throw new Error('노션 토큰이 올바르지 않습니다(401).');
+        }
+      }
+      // 3) 집필실에서 지운 문서 → 노션 페이지를 휴지통으로 (30일 동안 노션 휴지통에서 되살릴 수 있음)
+      const live=new Set(docs.map(d=>d.node.id));
+      for(const id of Object.keys(ns.docs)){
+        if(live.has(id)) continue;
+        const rec=ns.docs[id];
+        try{ if(rec.pageId) await nreq('PATCH', `/v1/pages/${rec.pageId}`, { archived:true }); result.removed++; delete ns.docs[id]; saveLocal(); }
+        catch(e){ if(e.status===404){ delete ns.docs[id]; saveLocal(); } else result.failed.push(`(삭제된 문서) — ${e.message}`); }
+      }
+      // 4) 목차·마지막 저장 시각
+      await writeHeader(docs);
+      ns.savedAt=new Date().toISOString(); saveLocal();
+      if(barEl) barEl.style.width='100%';
+      const msg=`완료 — 새로 만듦 ${result.created} · 갱신 ${result.updated} · 변경 없음 ${result.same} · 노션 휴지통으로 ${result.removed}${result.failed.length?` · 실패 ${result.failed.length}`:''}`;
+      log(msg); showToast(result.failed.length ? '노션 저장 중 일부 실패 — 창의 기록을 확인하세요' : '노션 저장 완료');
+    }catch(e){
+      log('중단: '+e.message);
+      if(e.status===404 || /Could not find|object_not_found/i.test(e.message)) log('→ 노션에서 저장 위치 페이지 오른쪽 위 ⋯ → 연결(Connections)에서 사용 중인 통합을 추가했는지 확인해 주세요.');
+      showToast('노션 저장 실패: '+e.message);
+    }finally{ running=false; renderModal(true); }
+  }
+
+  // ───── 창 ─────
+  function renderModal(keepLog){
+    const ns=nsState(); const docs=scenarioDocs();
+    const changed=docs.filter(d=>{ const rec=ns.docs[d.node.id]; return !rec || !rec.pageId || rec.hash!==docHash(d) || rec.failed; }).length;
+    const failed=docs.filter(d=>(ns.docs[d.node.id]||{}).failed).length;
+    const gone=Object.keys(ns.docs).filter(id=>!docs.some(d=>d.node.id===id)).length;
+    let el=document.getElementById('ns-modal');
+    const oldLog=keepLog && document.getElementById('nsLog') ? document.getElementById('nsLog').textContent : '';
+    if(!el){ el=document.createElement('div'); el.id='ns-modal'; el.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center'; el.addEventListener('click',e=>{ if(e.target===el && !running) el.style.display='none'; }); document.body.appendChild(el); }
+    el.style.display='flex';
+    const folder=scenarioFolder();
+    el.innerHTML=`<div style="background:#fbf8f2;color:#2b2620;border-radius:12px;width:min(620px,94vw);max-height:90vh;overflow:auto;padding:18px 20px;font-size:13px;line-height:1.6;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+      <div style="display:flex;align-items:center;justify-content:space-between"><b style="font-size:15px">노션에 시나리오 저장</b><button onclick="document.getElementById('ns-modal').style.display='none'" style="border:none;background:none;font-size:18px;cursor:pointer">✕</button></div>
+      <p style="margin:8px 0;color:#6b6257">"${esc(folder?folder.title:'집필실')}" 폴더의 문서 ${docs.length}개를 노션 <b>${esc(state.title)} — 시나리오</b> 페이지 아래 회차별 페이지로 저장합니다. 다시 저장하면 <b>바뀐 회차만</b> 같은 페이지 안에서 내용을 교체합니다(링크·순서 유지). 참고자료·자료실은 저장하지 않습니다.</p>
+      ${!folder?'<p style="color:#b03a2e">집필실 폴더를 찾지 못했습니다.</p>':''}
+      <div style="display:grid;grid-template-columns:110px 1fr;gap:6px 8px;align-items:center;margin:10px 0">
+        <label>저장 위치</label><input id="nsParent" value="${esc(ns.parent||'')}" placeholder="노션 페이지 주소 (이 페이지 아래에 시나리오 페이지가 생깁니다)" ${ns.pageId?'disabled title="이미 시나리오 페이지가 만들어져 있습니다"':''} style="padding:6px 8px;border:1px solid #d8cfc2;border-radius:6px">
+        <label>노션 토큰</label><input id="nsToken" type="password" value="${esc(wsNotion.token||'')}" placeholder="ntn_… / secret_…" style="padding:6px 8px;border:1px solid #d8cfc2;border-radius:6px">
+        <label>중계 주소</label><input id="nsProxy" value="${esc(wsNotion.proxy||'https://notion-proxy.firewood2000.workers.dev')}" style="padding:6px 8px;border:1px solid #d8cfc2;border-radius:6px">
+      </div>
+      <div style="background:#f1ebe1;border-radius:8px;padding:8px 10px;margin:8px 0">
+        ${ns.pageId?`시나리오 페이지: ${ns.url?`<a href="${esc(ns.url)}" target="_blank">노션에서 열기</a>`:'만들어짐'} · 마지막 저장 ${ns.savedAt?new Date(ns.savedAt).toLocaleString('ko-KR'):'-'}<br>`:'아직 노션에 저장한 적이 없습니다.<br>'}
+        이번에 저장할 회차: <b>${changed}</b>개 / 전체 ${docs.length}개${failed?` · 지난번 실패 ${failed}개`:''}${gone?` · 집필실에서 지워져 노션 휴지통으로 옮길 페이지 ${gone}개`:''}
+      </div>
+      <div style="height:6px;background:#e6ded1;border-radius:3px;overflow:hidden;margin:8px 0"><div id="nsBar" style="height:100%;width:0;background:#6b4f2e"></div></div>
+      <pre id="nsLog" style="background:#fff;border:1px solid #e6ded1;border-radius:6px;padding:8px;max-height:180px;overflow:auto;white-space:pre-wrap;font-size:12px;min-height:40px;margin:0">${esc(oldLog)}</pre>
+      <p style="color:#8a8076;font-size:12px;margin:8px 0">서식(굵게·기울임·밑줄·취소선·글자색·제목)은 노션 서식으로, 복선 등 태그는 표시를 남기고 구간에 배경색을 칠합니다. 문서 메모는 회차 맨 아래 📝 상자로 들어갑니다. 저장 위치 페이지에 노션 통합이 연결되어 있어야 합니다(⋯ → 연결). 회차가 많으면 1~2분 걸릴 수 있습니다.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        ${failed?'<button id="nsRetry" style="padding:8px 14px;border-radius:8px;border:1px solid #c8a96e;background:#fff;cursor:pointer">실패한 것만 다시</button>':''}
+        <button id="nsGo" style="padding:8px 16px;border-radius:8px;border:none;background:#4a3a28;color:#fff;font-weight:700;cursor:pointer" ${running||!folder?'disabled':''}>${running?'저장 중…':'노션에 저장'}</button>
+      </div></div>`;
+    const go=(onlyFailed)=>{
+      wsNotion.token=document.getElementById('nsToken').value.trim();
+      wsNotion.proxy=document.getElementById('nsProxy').value.trim()||'https://notion-proxy.firewood2000.workers.dev';
+      saveWsNotion();
+      const pi=document.getElementById('nsParent'); if(!pi.disabled){ ns.parent=pi.value.trim(); saveLocal(); }
+      document.getElementById('nsGo').disabled=true; document.getElementById('nsGo').textContent='저장 중…';
+      run(onlyFailed);
+    };
+    document.getElementById('nsGo').onclick=()=>go(false);
+    const rt=document.getElementById('nsRetry'); if(rt) rt.onclick=()=>go(true);
+  }
+  window.openNotionScenario=function(){ renderModal(false); };
+  // 점검용
+  window.__ns={ htmlToParas, parasToBlocks, docBlocks, scenarioDocs, nearestColor };
+})();
 </script>
 </body>
 </html>
