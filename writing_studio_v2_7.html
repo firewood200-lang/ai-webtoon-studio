@@ -4042,7 +4042,8 @@ fetch('/version.json?_=' + Date.now())
     return out;
   }
   function hashOf(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return (h>>>0).toString(36); }
-  function docHash(d){ return hashOf([d.title, d.node.status||'', d.node.body||'', d.node.memo||''].join('\u0001')); }
+  const FORMAT_VER = 2; // 노션 변환 방식이 바뀌면 올린다 → 모든 회차를 한 번 다시 저장
+  function docHash(d){ return hashOf(['f'+FORMAT_VER, d.title, d.node.status||'', d.node.body||'', d.node.memo||''].join('\u0001')); }
 
   // ───── HTML 본문 → 노션 블록 ─────
   function nearestColor(css){
@@ -4124,7 +4125,7 @@ fetch('/version.json?_=' + Date.now())
       if(p.type!=='p'){ flush(); const rich=[]; addRuns(rich, runs); if(rich.length){ const k='heading_'+p.type.slice(1); blocks.push({ object:'block', type:k, [k]:{ rich_text:rich.slice(0,MAX_RICH) } }); } continue; }
       const rich=[]; addRuns(rich, runs);
       if(curRich && curRich.length + rich.length + 1 > MAX_RICH) flush();
-      if(!curRich) curRich=[]; else curRich.push({ type:'text', text:{content:'\n\n'} });
+      if(!curRich) curRich=[]; else curRich.push({ type:'text', text:{content:'\n'} });   // 집필실은 한 줄=한 문단이므로 줄바꿈 하나로 잇는다(빈 줄은 원본의 빈 문단으로만 생김)
       if(!rich.length){ curRich.push({type:'text',text:{content:''}}); continue; }
       while(rich.length > MAX_RICH){ flush(); blocks.push({ object:'block', type:'paragraph', paragraph:{ rich_text:rich.splice(0,MAX_RICH) } }); curRich=[]; }
       curRich.push(...rich);
@@ -4179,25 +4180,11 @@ fetch('/version.json?_=' + Date.now())
   }
   const titleProp=(t)=>({ title:{ title:[{ text:{ content:String(t).slice(0,200) } }] } });
 
-  function headerBlocksRich(docs){
+  // 시나리오 페이지 본문에는 따로 목차를 두지 않는다(노션이 하위 회차 페이지를 자동으로 나열). 예전 버전이 만든 목차 블록은 지운다.
+  async function removeHeader(){
     const ns=nsState();
-    const head=[{type:'text',text:{content:`집필실 원고를 Writing Studio에서 저장한 페이지입니다. 마지막 저장: ${new Date().toLocaleString('ko-KR')} · 회차 ${docs.length}개\n\n`},annotations:{color:'gray'}},{type:'text',text:{content:'목차\n'},annotations:{bold:true}}];
-    const items=[];
-    docs.forEach(d=>{ const rec=ns.docs[d.node.id]; if(rec && rec.pageId){ items.push({type:'mention',mention:{type:'page',page:{id:rec.pageId}}}); items.push({type:'text',text:{content:'\n'}}); } else items.push({type:'text',text:{content:d.title+'\n'}}); });
-    const groups=[]; let curr=head.slice();
-    for(const it of items){ if(curr.length>=MAX_RICH){ groups.push(curr); curr=[]; } curr.push(it); }
-    groups.push(curr);
-    return groups;
-  }
-  async function writeHeader(docs){
-    const ns=nsState(); const groups=headerBlocksRich(docs);
-    const ids=ns.headerIds||[];
-    for(let i=0;i<groups.length;i++){
-      if(ids[i]){ try{ await nreq('PATCH', `/v1/blocks/${ids[i]}`, { paragraph:{ rich_text:groups[i] } }); continue; } catch(e){ if(e.status!==404 && e.status!==400) throw e; } }
-      const added=await appendBlocks(ns.pageId, [{object:'block',type:'paragraph',paragraph:{rich_text:groups[i]}}]); ids[i]=added[0];
-    }
-    for(let i=groups.length;i<ids.length;i++){ await nreq('PATCH', `/v1/blocks/${ids[i]}`, { paragraph:{ rich_text:[] } }).catch(()=>{}); }
-    ns.headerIds=ids.slice(0, Math.max(groups.length, ids.length));
+    for(const id of ns.headerIds||[]){ try{ await nreq('PATCH', `/v1/blocks/${id}`, { archived:true }); }catch(e){ if(e.status!==404 && e.status!==400) throw e; } }
+    ns.headerIds=[];
   }
 
   // ───── 저장 실행 ─────
@@ -4220,7 +4207,6 @@ fetch('/version.json?_=' + Date.now())
       if(!ns.pageId){
         const p=await nreq('POST','/v1/pages',{ parent:{ page_id:parent }, icon:{type:'emoji',emoji:'📘'}, properties:titleProp(title) });
         ns.pageId=p.id; ns.url=p.url; ns.headerIds=[]; saveLocal(); log('시나리오 페이지를 만들었습니다.');
-        await writeHeader(docs); saveLocal();
       }
       // 2) 회차
       const todo=docs.filter(d=>{ const rec=ns.docs[d.node.id]; return onlyFailed ? (rec && rec.failed) : (!rec || !rec.pageId || rec.hash!==docHash(d) || rec.failed); });
@@ -4261,8 +4247,8 @@ fetch('/version.json?_=' + Date.now())
         try{ if(rec.pageId) await nreq('PATCH', `/v1/pages/${rec.pageId}`, { archived:true }); result.removed++; delete ns.docs[id]; saveLocal(); }
         catch(e){ if(e.status===404){ delete ns.docs[id]; saveLocal(); } else result.failed.push(`(삭제된 문서) — ${e.message}`); }
       }
-      // 4) 목차·마지막 저장 시각
-      await writeHeader(docs);
+      // 4) 예전 버전의 목차 블록 정리
+      await removeHeader();
       ns.savedAt=new Date().toISOString(); saveLocal();
       if(barEl) barEl.style.width='100%';
       const msg=`완료 — 새로 만듦 ${result.created} · 갱신 ${result.updated} · 변경 없음 ${result.same} · 노션 휴지통으로 ${result.removed}${result.failed.length?` · 실패 ${result.failed.length}`:''}`;
