@@ -4016,6 +4016,11 @@ fetch('/version.json?_=' + Date.now())
   const NS_COLORS = { gray:[155,154,151], brown:[100,71,58], orange:[217,115,13], yellow:[223,171,1], green:[15,123,108], blue:[11,110,153], purple:[105,64,165], pink:[173,26,114], red:[224,62,62] };
   const TAG_BG = { '형광펜':'yellow_background', '복선':'blue_background', '단서':'green_background', '회수':'purple_background', '반전':'red_background', '주의':'orange_background' };
   const MAX_TEXT = 1900, MAX_RICH = 90;
+  // 노션 저장 전용 중계: 집필실 사이트 안의 /notion (Cloudflare Pages Functions, 같은 주소라 CORS 검사 없음 → PATCH 가능).
+  // 기존 workers.dev 중계는 PATCH를 막아 "Failed to fetch"가 나므로 저장에는 쓰지 않는다(리서치 불러오기는 기존 그대로).
+  const OLD_PROXY = 'https://notion-proxy.firewood2000.workers.dev';
+  function defaultSaveProxy(){ return /^https?:/.test(location.protocol) ? location.origin + '/notion' : OLD_PROXY; }
+  function saveProxy(){ const p = wsNotion.saveProxy; return (p && p.replace(/\/+$/,'') !== OLD_PROXY) ? p : defaultSaveProxy(); }
 
   function nsState(){ state.notionScenario = state.notionScenario || { parent:'', pageId:'', headerIds:[], docs:{}, savedAt:'' }; state.notionScenario.docs = state.notionScenario.docs || {}; return state.notionScenario; }
   function pageIdFrom(s){ const m=String(s||'').replace(/-/g,'').match(/[0-9a-f]{32}/i); return m ? m[0].replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5') : ''; }
@@ -4143,7 +4148,7 @@ fetch('/version.json?_=' + Date.now())
   // ───── 노션 요청 (중계 서버 경유, 속도 제한 대응) ─────
   let lastCall=0;
   async function nreq(method, path, body){
-    const proxy=(wsNotion.proxy||'https://notion-proxy.firewood2000.workers.dev').replace(/\/+$/,'');
+    const proxy=saveProxy().replace(/\/+$/,'');
     for(let attempt=0; attempt<4; attempt++){
       const wait=Math.max(0, 360-(Date.now()-lastCall)); if(wait) await new Promise(r=>setTimeout(r,wait));
       lastCall=Date.now();
@@ -4287,7 +4292,7 @@ fetch('/version.json?_=' + Date.now())
       <div style="display:grid;grid-template-columns:110px 1fr;gap:6px 8px;align-items:center;margin:10px 0">
         <label>저장 위치</label><input id="nsParent" value="${esc(ns.parent||'')}" placeholder="노션 페이지 주소 (이 페이지 아래에 시나리오 페이지가 생깁니다)" ${ns.pageId?'disabled title="이미 시나리오 페이지가 만들어져 있습니다"':''} style="padding:6px 8px;border:1px solid #d8cfc2;border-radius:6px">
         <label>노션 토큰</label><input id="nsToken" type="password" value="${esc(wsNotion.token||'')}" placeholder="ntn_… / secret_…" style="padding:6px 8px;border:1px solid #d8cfc2;border-radius:6px">
-        <label>중계 주소</label><input id="nsProxy" value="${esc(wsNotion.proxy||'https://notion-proxy.firewood2000.workers.dev')}" style="padding:6px 8px;border:1px solid #d8cfc2;border-radius:6px">
+        <label>중계 주소</label><input id="nsProxy" value="${esc(saveProxy())}" style="padding:6px 8px;border:1px solid #d8cfc2;border-radius:6px">
       </div>
       <div style="background:#f1ebe1;border-radius:8px;padding:8px 10px;margin:8px 0">
         ${ns.pageId?`시나리오 페이지: ${ns.url?`<a href="${esc(ns.url)}" target="_blank">노션에서 열기</a>`:'만들어짐'} · 마지막 저장 ${ns.savedAt?new Date(ns.savedAt).toLocaleString('ko-KR'):'-'}<br>`:'아직 노션에 저장한 적이 없습니다.<br>'}
@@ -4302,7 +4307,7 @@ fetch('/version.json?_=' + Date.now())
       </div></div>`;
     const go=(onlyFailed)=>{
       wsNotion.token=document.getElementById('nsToken').value.trim();
-      wsNotion.proxy=document.getElementById('nsProxy').value.trim()||'https://notion-proxy.firewood2000.workers.dev';
+      wsNotion.saveProxy=document.getElementById('nsProxy').value.trim()||defaultSaveProxy();
       saveWsNotion();
       const pi=document.getElementById('nsParent'); if(!pi.disabled){ ns.parent=pi.value.trim(); saveLocal(); }
       document.getElementById('nsGo').disabled=true; document.getElementById('nsGo').textContent='저장 중…';
