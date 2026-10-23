@@ -3,7 +3,7 @@
 <html lang="ko"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Writing Studio Lite v2.8 - 자동 히스토리</title>
+<title>Writing Studio Lite v2.9 - 작가실 연동</title>
 <style>
 :root{
   --bg:#f2efe7; --panel:#fffdf8; --panel2:#f8f3e9; --line:#d7cdbc;
@@ -153,12 +153,25 @@ header input{width:190px}
   .left-stack{display:block;border-right:0}
   .editor-pane{min-height:520px;border-right:0;border-bottom:1px solid var(--line)}
 }
+/* v2.9 작가실 탭 */
+.library{position:relative}
+.rtabs{display:flex;gap:4px;align-items:center}
+.rtab{height:28px;padding:3px 12px;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--muted,#8a7e72);cursor:pointer}
+.rtab.on{background:#6b4429;color:#fff;border-color:#6b4429}
+.library .wr-panel{display:none}
+.library.wr-on .wr-panel{display:block;position:absolute;left:0;right:0;top:48px;bottom:0;background:var(--panel2);z-index:5}
+.library.wr-on .lib-head .lib-tools{display:none}
+.wr-panel iframe{width:100%;height:100%;border:0;display:block}
+.wr-msg{padding:24px 18px;line-height:1.7;font-size:14px}
+.wr-msg code{background:#f1e8dc;padding:1px 5px;border-radius:4px;font-size:12.5px}
+.wr-msg button{margin-top:6px}
+body.wr-on #_errbtn,body.wr-on #_errpanel,body.wr-on #buildVersion{right:auto!important;left:16px!important}
 </style>
 </head>
 <body>
 <div class="app" style="grid-template-columns: 300px minmax(520px, 1fr) 8px 520px;">
 <header>
-  <h1>Writing Studio Lite v2.8 <span class="small">자동 히스토리(버전 스냅샷) 추가</span></h1>
+  <h1>Writing Studio Lite v2.9 <span class="small">작가실 연동(오른쪽 패널 탭)</span></h1>
   <button class="primary" onclick="newProject()">새 프로젝트</button>
   <button onclick="addNode(&#39;doc&#39;)">원고</button>
   <button onclick="addNode(&#39;character&#39;)">캐릭터</button>
@@ -851,13 +864,14 @@ VPA 추적요원들이 들이닥치며 남혁이 최초 목격자가 되는 것�
 
 <div id="mainLibWidthGrip" class="splitter-v" title="중앙 / 우측 자료실 폭 조절"></div><section class="library" style="grid-template-rows: 48px 578px 8px 1fr 8px 188px;">
   <div class="lib-head">
-    <b>대형 자료실</b>
-    <div style="display:flex;align-items:center;gap:6px">
+    <div class="rtabs"><button class="rtab on" data-rtab="lib" onclick="wsRightTab('lib')">대형 자료실</button><button class="rtab" data-rtab="wr" onclick="wsRightTab('wr')" title="작가실(Claude·GPT·Gemini 대화형 회차 제작) — PC에서 작가실을 켜 두어야 합니다">작가실</button></div>
+    <div class="lib-tools" style="display:flex;align-items:center;gap:6px">
       <input id="resourceSearch" placeholder="자료 검색" style="width:120px;height:26px;font-size:12px;padding:3px 8px" oninput="resourceSearchOverride=null;runResourceSearch()">
       <button id="resourceSearchAIBtn" onclick="runResourceSearchAI()" title="검색 결과를 로컬 AI로 관련성 필터링" style="display:none;height:26px;font-size:11px;padding:3px 8px;white-space:nowrap">🖥 관련 자료만</button>
       <button id="libEditToggle" onclick="toggleLibEditor()" style="height:26px;font-size:11px;padding:3px 8px;white-space:nowrap">▾ 편집칸</button>
     </div>
   </div>
+  <div id="wrPanel" class="wr-panel"></div>
   <div id="resourceList" class="lib-list"><div class="lib-item active"><b>참고 자료</b><div class="small">자료실은 오른쪽 전체 패널에서 넓게 읽는 용도입니다.</div></div></div>
   <div class="lib-splitter" id="libSplitListBody" title="자료목록 / 자료본문 높이 조절"></div>
   <div class="lib-body">
@@ -4305,6 +4319,100 @@ fetch('/version.json?_=' + Date.now())
   window.openNotionScenario=function(){ renderModal(false); };
   // 점검용
   window.__ns={ htmlToParas, parasToBlocks, docBlocks, scenarioDocs, nearestColor };
+})();
+</script>
+<script>
+// ── 작가실 연동 (v2.9) — 오른쪽 패널 [대형 자료실][작가실] 탭 ──
+// 작가실은 PC에서 켜 둔 로컬 앱(http://127.0.0.1:47850)이다. 이 페이지는 화면만 끼워 넣고,
+// 원고는 postMessage로 주고받는다(키·토큰 전달 없음).
+(function(){
+  const WR_URL='http://127.0.0.1:47850';
+  const TAB_KEY='ws_right_tab';
+  let lastRange=null, frameReady=false, lastCtx='';
+
+  function tabGet(){ try{ return localStorage.getItem(TAB_KEY)||'lib'; }catch(e){ return 'lib'; } }
+  function tabSet(v){ try{ localStorage.setItem(TAB_KEY,v); }catch(e){} }
+
+  // 집필실 편집기(richEditor_a)의 마지막 커서 위치 기억 — 작가실 창을 누르면 선택이 사라지므로
+  document.addEventListener('selectionchange',()=>{
+    const sel=window.getSelection(); if(!sel||!sel.rangeCount) return;
+    const ed=document.getElementById('richEditor_a'); if(!ed) return;
+    const r=sel.getRangeAt(0);
+    if(ed.contains(r.startContainer)) lastRange=r.cloneRange();
+  });
+
+  function context(){
+    const docId=state.panels&&state.panels.a;
+    const n=(state.nodes||[]).find(x=>x.id===docId);
+    return { type:'ws:context', projectId:state.id, project:state.title||'', docId:docId||'', docTitle:n?n.title:'' };
+  }
+  function postCtx(force){
+    const f=document.getElementById('wrFrame'); if(!f||!frameReady) return;
+    const c=context(); const k=JSON.stringify(c);
+    if(!force && k===lastCtx) return; lastCtx=k;
+    f.contentWindow.postMessage(c, WR_URL);
+  }
+  setInterval(()=>postCtx(false),1500);
+
+  function textToHtml(t){
+    return String(t||'').split('\n').map(l=>`<p>${l.trim()?esc(l):'<br>'}</p>`).join('');
+  }
+  function insertToEditor(text){
+    const ed=document.getElementById('richEditor_a');
+    if(!ed){ showToast('집필실 편집기를 찾지 못했습니다.'); return; }
+    ed.focus();
+    const sel=window.getSelection(); sel.removeAllRanges();
+    if(lastRange && ed.contains(lastRange.startContainer)) sel.addRange(lastRange);
+    else { const r=document.createRange(); r.selectNodeContents(ed); r.collapse(false); sel.addRange(r); }
+    document.execCommand('insertHTML',false,textToHtml(text));
+    if(typeof syncRichEditor==='function') syncRichEditor(ed);
+    showToast(lastRange?'커서 위치에 넣었습니다.':'문서 끝에 넣었습니다.');
+  }
+
+  window.addEventListener('message',(ev)=>{
+    if(ev.origin!==WR_URL) return;
+    const d=ev.data||{};
+    if(d.type==='wr:ready'){ frameReady=true; postCtx(true); }
+    else if(d.type==='writers-room:insert'){ insertToEditor(d.text); }
+    else if(d.type==='wr:getManuscript'){
+      const ed=document.getElementById('richEditor_a');
+      const c=context();
+      ev.source.postMessage({ type:'ws:manuscript', reqId:d.reqId, text: ed?ed.innerText:'', docTitle:c.docTitle }, WR_URL);
+    }
+  });
+
+  async function engineUp(){
+    try{
+      const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),2500);
+      const r=await fetch(WR_URL+'/api/ping',{signal:ctl.signal, cache:'no-store'});
+      clearTimeout(t); const j=await r.json(); return j&&j.app==='writers-room';
+    }catch(e){ return false; }
+  }
+  async function openWr(){
+    const box=document.getElementById('wrPanel'); if(!box) return;
+    if(document.getElementById('wrFrame')) return;
+    box.innerHTML='<div class="wr-msg">작가실에 연결하는 중…</div>';
+    if(!(await engineUp())){
+      box.innerHTML=`<div class="wr-msg"><b>작가실이 꺼져 있거나 연결이 허용되지 않았습니다.</b><br><br>
+        1. PC에서 <code>D:\\AI-Workflow\\writers-room\\작가실 실행.vbs</code>를 실행해 주세요.<br>
+        2. Chrome이 "로컬 네트워크 기기 접근"을 물으면 <b>허용</b>을 눌러 주세요.<br><br>
+        <button onclick="wrRetry()">다시 연결</button></div>`;
+      return;
+    }
+    frameReady=false; lastCtx='';
+    box.innerHTML=`<iframe id="wrFrame" src="${WR_URL}/?embed=1" allow="clipboard-write; local-network-access"></iframe>`;
+  }
+  window.wrRetry=()=>{ const b=document.getElementById('wrPanel'); if(b) b.innerHTML=''; openWr(); };
+
+  window.wsRightTab=function(tab){
+    const lib=document.querySelector('.library'); if(!lib) return;
+    lib.classList.toggle('wr-on', tab==='wr');
+    document.body.classList.toggle('wr-on', tab==='wr'); // 오른쪽 아래 떠 있는 표시가 작가실 전송 버튼을 가리지 않게
+    document.querySelectorAll('.rtab').forEach(b=>b.classList.toggle('on', b.dataset.rtab===tab));
+    tabSet(tab);
+    if(tab==='wr') openWr();
+  };
+  window.addEventListener('load',()=>{ if(tabGet()==='wr') wsRightTab('wr'); });
 })();
 </script>
 </body>
